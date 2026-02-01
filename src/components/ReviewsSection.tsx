@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { Star, ChevronLeft, ChevronRight, Quote } from 'lucide-react';
 
 const reviews = [
@@ -53,21 +52,6 @@ const reviews = [
   },
 ];
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-    },
-  },
-};
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0 },
-};
-
 const ReviewsSection = () => {
   const [startIndex, setStartIndex] = useState(0);
   const reviewsPerPage = 3;
@@ -94,10 +78,7 @@ const ReviewsSection = () => {
     <section className="bg-gradient-to-b from-[#F5F0E8] to-[#EDE6DB] py-10 md:py-14">
       <div className="container mx-auto px-4">
         {/* Section Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
+        <div
           className="mb-8 text-center"
         >
           <div className="mb-2 inline-flex items-center gap-2 text-sm text-primary">
@@ -108,22 +89,17 @@ const ReviewsSection = () => {
           <h2 className="font-serif text-3xl font-bold text-foreground md:text-4xl">
             What Our Customers Say
           </h2>
-        </motion.div>
+        </div>
 
         {/* Reviews Grid */}
         <div className="relative">
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
+          <div
             className="grid gap-5 md:grid-cols-3"
             key={startIndex}
           >
             {visibleReviews.map((review) => (
-              <motion.div
+              <div
                 key={review.id}
-                variants={itemVariants}
                 className="rounded-lg bg-card p-6 shadow-luxury"
               >
                 {/* Quote Icon */}
@@ -158,9 +134,9 @@ const ReviewsSection = () => {
                 <p className="text-sm italic text-muted-foreground line-clamp-4">
                   "{review.text}"
                 </p>
-              </motion.div>
+              </div>
             ))}
-          </motion.div>
+          </div>
 
           {/* Navigation - only show if more than one page */}
           {totalPages > 1 && (

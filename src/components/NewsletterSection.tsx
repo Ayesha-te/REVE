@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -23,10 +22,7 @@ const NewsletterSection = () => {
   return (
     <section className="bg-[#FAF8F5] py-8 md:py-10">
       <div className="container mx-auto px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
+        <div
           className="mx-auto max-w-2xl text-center"
         >
           <h2 className="mb-2 font-serif text-2xl font-bold text-foreground md:text-3xl">
@@ -59,7 +55,7 @@ const NewsletterSection = () => {
           <p className="mt-3 text-xs text-muted-foreground">
             By subscribing, you agree to our Privacy Policy. Unsubscribe anytime.
           </p>
-        </motion.div>
+        </div>
       </div>
     </section>
   );

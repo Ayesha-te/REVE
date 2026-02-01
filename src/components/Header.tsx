@@ -71,10 +71,7 @@ const Header = () => {
 
   return (
     <>
-      <motion.header
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.5 }}
+      <header
         className={`fixed left-0 right-0 top-0 z-50 transition-all duration-300 ${
           isScrolled
             ? 'border-b border-white/10 bg-background shadow-lg'
@@ -290,7 +287,7 @@ const Header = () => {
             </motion.div>
           )}
         </AnimatePresence>
-      </motion.header>
+      </header>
 
       {/* Spacer for fixed header + announcement bar */}
       <div className={`h-[${isScrolled ? '80px' : '80px'}]`} style={{ height: isScrolled ? '80px' : '80px' }} />

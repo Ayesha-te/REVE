@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -35,52 +34,16 @@ const featuredCategories = [
   },
 ];
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.15,
-      delayChildren: 0.1,
-    },
-  },
-};
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 30, scale: 0.95 },
-  visible: { 
-    opacity: 1, 
-    y: 0, 
-    scale: 1,
-    transition: {
-      duration: 0.6,
-      ease: [0.22, 1, 0.36, 1],
-    }
-  },
-};
-
 const CategoryGrid = () => {
   return (
     <section className="py-14 md:py-20 bg-background">
       <div className="container mx-auto px-4">
         {/* Section Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="mb-10 flex flex-col items-center justify-between gap-6 lg:flex-row"
-        >
+        <div className="mb-10 flex flex-col items-center justify-between gap-6 lg:flex-row">
           <div className="text-center lg:text-left">
-            <motion.span 
-              initial={{ opacity: 0, scale: 0.8 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 }}
-              className="mb-4 inline-block rounded-full bg-primary/10 px-4 py-1.5 text-xs font-medium uppercase tracking-widest text-primary"
-            >
+            <span className="mb-4 inline-block rounded-full bg-primary/10 px-4 py-1.5 text-xs font-medium uppercase tracking-widest text-primary">
               Explore Our Range
-            </motion.span>
+            </span>
             <h2 className="font-serif text-4xl font-bold text-foreground md:text-5xl">
               Shop by Category
             </h2>
@@ -89,12 +52,7 @@ const CategoryGrid = () => {
             </p>
           </div>
           
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.4 }}
-          >
+          <div>
             <Button 
               asChild 
               size="lg"
@@ -105,21 +63,14 @@ const CategoryGrid = () => {
                 <ArrowRight className="ml-2 h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
               </Link>
             </Button>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
 
         {/* Category Grid - 4 items */}
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          className="grid gap-4 md:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 auto-rows-[240px] md:auto-rows-[260px]"
-        >
+        <div className="grid gap-4 md:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 auto-rows-[240px] md:auto-rows-[260px]">
           {featuredCategories.map((category) => (
-            <motion.div 
-              key={category.id} 
-              variants={itemVariants}
+            <div 
+              key={category.id}
             >
               <Link
                 to={`/category/${category.slug}`}
@@ -151,12 +102,11 @@ const CategoryGrid = () => {
                     <span className="rounded-full bg-cream/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-cream backdrop-blur-sm">
                       Collection
                     </span>
-                    <motion.div 
+                    <div 
                       className="flex h-9 w-9 items-center justify-center rounded-full bg-cream/10 text-cream backdrop-blur-sm transition-all duration-300 group-hover:bg-primary group-hover:text-primary-foreground"
-                      whileHover={{ rotate: 45 }}
                     >
                       <ArrowUpRight className="h-4 w-4" />
-                    </motion.div>
+                    </div>
                   </div>
                   
                   {/* Bottom - Category Info */}
@@ -173,9 +123,9 @@ const CategoryGrid = () => {
                   </div>
                 </div>
               </Link>
-            </motion.div>
+            </div>
           ))}
-        </motion.div>
+        </div>
       </div>
     </section>
   );

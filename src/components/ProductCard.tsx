@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,12 +14,7 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
   const savings = product.originalPrice ? product.originalPrice - product.price : 0;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ delay: index * 0.1 }}
-    >
+    <div>
       <Link
         to={`/product/${product.slug}`}
         className="group block overflow-hidden rounded-lg bg-card shadow-luxury transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl"
@@ -93,7 +87,7 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
           </Button>
         </div>
       </Link>
-    </motion.div>
+    </div>
   );
 };
 
