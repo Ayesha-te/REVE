@@ -65,6 +65,14 @@ const Header = () => {
         { name: 'Corner Sofas', href: '/category/sofas?type=corner', description: 'Large corner configurations' },
       ],
     },
+    {
+      name: 'Furniture',
+      href: '#',
+      children: [
+        { name: 'Wardrobes', href: '/category/wardrobes', description: 'Stylish storage solutions - Coming Soon' },
+        { name: 'Bedside Tables', href: '/category/bedside-tables', description: 'Complete your bedroom - Coming Soon' },
+      ],
+    },
     { name: 'About Us', href: '/about' },
     { name: 'Contact Us', href: '/contact' },
   ];

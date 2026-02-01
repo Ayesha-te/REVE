@@ -20,7 +20,7 @@ const NewsletterSection = () => {
   };
 
   return (
-    <section className="bg-[#FAF8F5] py-8 md:py-10">
+    <section className="bg-[#F0EBE3] py-8 md:py-10">
       <div className="container mx-auto px-4">
         <div
           className="mx-auto max-w-2xl text-center"
