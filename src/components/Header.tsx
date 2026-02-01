@@ -77,7 +77,7 @@ const Header = () => {
         transition={{ duration: 0.5 }}
         className={`fixed left-0 right-0 top-0 z-50 transition-all duration-300 ${
           isScrolled
-            ? 'border-b border-white/10 bg-background/70 shadow-lg backdrop-blur-xl'
+            ? 'border-b border-white/10 bg-background shadow-lg'
             : 'bg-background'
         }`}
         style={{ top: isScrolled ? 0 : '20px' }}

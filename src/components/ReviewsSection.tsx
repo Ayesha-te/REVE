@@ -91,7 +91,7 @@ const ReviewsSection = () => {
   const visibleReviews = reviews.slice(startIndex, startIndex + reviewsPerPage);
 
   return (
-    <section className="bg-muted/30 py-12 md:py-16">
+    <section className="bg-gradient-to-b from-[#F5F0E8] to-[#EDE6DB] py-10 md:py-14">
       <div className="container mx-auto px-4">
         {/* Section Header */}
         <motion.div
