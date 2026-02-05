@@ -5,7 +5,6 @@ import CategoryGrid from '@/components/CategoryGrid';
 import BestsellersSection from '@/components/BestsellersSection';
 import LifestyleSection from '@/components/LifestyleSection';
 import TrustSection from '@/components/TrustSection';
-import ReviewsSection from '@/components/ReviewsSection';
 import NewsletterSection from '@/components/NewsletterSection';
 import Footer from '@/components/Footer';
 
@@ -20,7 +19,6 @@ const Index = () => {
         <BestsellersSection />
         <TrustSection />
 
-        <ReviewsSection />
                         <LifestyleSection />
 
         <NewsletterSection />
