@@ -109,19 +109,28 @@ const CheckoutPage = () => {
       localStorage.setItem('last_order_id', String(orderRes.id));
 
       if (paymentMethod === 'card') {
-        const session = await apiPost<{ url: string }>('/payments/create_stripe_session/', {
-          items: state.items.map((item) => ({
-            name: item.product.name,
-            price: item.product.price,
-            quantity: item.quantity,
-          })),
-          delivery_charges: deliveryFee,
-          currency: 'gbp',
-          success_url: `${window.location.origin}/checkout?success=1`,
-          cancel_url: `${window.location.origin}/checkout?canceled=1`,
-        });
-        window.location.href = session.url;
-        return;
+        try {
+          const session = await apiPost<{ url: string; id: string }>('/payments/create_stripe_session/', {
+            items: state.items.map((item) => ({
+              name: item.product.name,
+              price: String(item.product.price),
+              quantity: item.quantity,
+            })),
+            delivery_charges: String(deliveryFee),
+            currency: 'gbp',
+            success_url: `${window.location.origin}/checkout?success=1`,
+            cancel_url: `${window.location.origin}/checkout?canceled=1`,
+          });
+          if (session.url) {
+            window.location.href = session.url;
+            return;
+          } else {
+            toast.error('Failed to initialize payment. Please try again.');
+          }
+        } catch (error) {
+          console.error('Stripe session creation failed:', error);
+          toast.error('Payment initialization failed. Please try again.');
+        }
       }
 
       if (paymentMethod === 'paypal') {
