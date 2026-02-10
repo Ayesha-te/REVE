@@ -8,6 +8,12 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { useCart } from '@/context/CartContext';
 
+const getVariantsKey = (item: { selectedVariants?: Record<string, string>; fabric?: string }) =>
+  JSON.stringify({
+    selectedVariants: item.selectedVariants || {},
+    fabric: item.fabric || '',
+  });
+
 const CartPage = () => {
   const { state, removeItem, updateQuantity, totalPrice } = useCart();
 
@@ -46,7 +52,7 @@ const CartPage = () => {
               <div className="space-y-4">
                 {state.items.map((item) => (
                   <motion.div
-                    key={`${item.product.id}-${item.size}-${item.color}`}
+                    key={`${item.product.id}-${item.size}-${item.color}-${getVariantsKey(item)}`}
                     layout
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -75,9 +81,16 @@ const CartPage = () => {
                           <p className="mt-1 text-sm text-muted-foreground">
                             Size: {item.size} | Colour: {item.color}
                           </p>
-                          {item.headboardStyle && (
+                          {item.fabric && (
                             <p className="text-sm text-muted-foreground">
-                              Headboard: {item.headboardStyle}
+                              Fabric: {item.fabric}
+                            </p>
+                          )}
+                          {item.selectedVariants && Object.keys(item.selectedVariants).length > 0 && (
+                            <p className="text-sm text-muted-foreground">
+                              {Object.entries(item.selectedVariants)
+                                .map(([group, value]) => `${group}: ${value}`)
+                                .join(' | ')}
                             </p>
                           )}
                         </div>
@@ -95,6 +108,7 @@ const CartPage = () => {
                                 item.product.id,
                                 item.size,
                                 item.color,
+                                getVariantsKey(item),
                                 Math.max(1, item.quantity - 1)
                               )
                             }
@@ -109,6 +123,7 @@ const CartPage = () => {
                                 item.product.id,
                                 item.size,
                                 item.color,
+                                getVariantsKey(item),
                                 item.quantity + 1
                               )
                             }
@@ -120,7 +135,7 @@ const CartPage = () => {
 
                         {/* Remove */}
                         <button
-                          onClick={() => removeItem(item.product.id, item.size, item.color)}
+                          onClick={() => removeItem(item.product.id, item.size, item.color, getVariantsKey(item))}
                           className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-destructive"
                         >
                           <Trash2 className="h-4 w-4" />

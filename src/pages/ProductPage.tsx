@@ -30,6 +30,32 @@ const isLightColor = (hexColor: string): boolean => {
   return luminance > 0.5;
 };
 
+type NormalizedStyleOption = {
+  label: string;
+  description?: string;
+};
+
+const normalizeStyleOptions = (options: unknown): NormalizedStyleOption[] => {
+  if (!Array.isArray(options)) return [];
+  return options
+    .map((option) => {
+      if (typeof option === 'string') {
+        const label = option.trim();
+        return label ? { label } : null;
+      }
+      if (option && typeof option === 'object') {
+        const rawLabel = (option as { label?: unknown; name?: unknown }).label ?? (option as { name?: unknown }).name;
+        const label = typeof rawLabel === 'string' ? rawLabel.trim() : '';
+        if (!label) return null;
+        const rawDescription = (option as { description?: unknown }).description;
+        const description = typeof rawDescription === 'string' ? rawDescription.trim() : '';
+        return { label, description };
+      }
+      return null;
+    })
+    .filter((option): option is NormalizedStyleOption => Boolean(option));
+};
+
 const ProductPage = () => {
   const { slug } = useParams<{ slug: string }>();
   const [product, setProduct] = useState<Product | null>(null);
@@ -42,7 +68,8 @@ const ProductPage = () => {
   const [selectedImage, setSelectedImage] = useState(0);
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
-  const [selectedHeadboard, setSelectedHeadboard] = useState('');
+  const [selectedStyles, setSelectedStyles] = useState<Record<string, string>>({});
+  const [selectedFabric, setSelectedFabric] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [isZoomed, setIsZoomed] = useState(false);
 
@@ -73,9 +100,18 @@ const ProductPage = () => {
         if (fetched?.colors?.length) {
           setSelectedColor(fetched.colors[0].name);
         }
-        const firstStyle = fetched?.styles?.[0]?.options?.[0];
-        if (firstStyle) {
-          setSelectedHeadboard(firstStyle);
+        const initialStyles: Record<string, string> = {};
+        (fetched?.styles || []).forEach((styleGroup) => {
+          const firstOption = normalizeStyleOptions(styleGroup.options)[0];
+          if (firstOption) {
+            initialStyles[styleGroup.name] = firstOption.label;
+          }
+        });
+        setSelectedStyles(initialStyles);
+        if (fetched?.fabrics?.length) {
+          setSelectedFabric(fetched.fabrics[0].name);
+        } else {
+          setSelectedFabric('');
         }
         setIsLoading(false);
       } catch {
@@ -123,7 +159,8 @@ const ProductPage = () => {
       quantity,
       size: selectedSize,
       color: selectedColor,
-      headboardStyle: selectedHeadboard || undefined,
+      selectedVariants: selectedStyles,
+      fabric: selectedFabric || undefined,
     });
     toast.success(`${product.name} added to cart!`);
   };
@@ -299,20 +336,59 @@ const ProductPage = () => {
             </div>
 
             {product.styles && product.styles.length > 0 && (
+              <div className="space-y-6">
+                {product.styles.map((styleGroup) => {
+                  const options = normalizeStyleOptions(styleGroup.options);
+                  if (options.length === 0) return null;
+                  return (
+                    <div key={styleGroup.id}>
+                      <h3 className="mb-3 font-medium">{styleGroup.name}</h3>
+                      <div className="space-y-2">
+                        {options.map((styleOption) => (
+                          <button
+                            key={`${styleGroup.id}-${styleOption.label}`}
+                            onClick={() =>
+                              setSelectedStyles((prev) => ({ ...prev, [styleGroup.name]: styleOption.label }))
+                            }
+                            className={`w-full rounded-md border px-4 py-3 text-left text-sm transition-all ${
+                              selectedStyles[styleGroup.name] === styleOption.label
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-border hover:border-primary'
+                            }`}
+                          >
+                            <span className="block font-medium">{styleOption.label}</span>
+                            {styleOption.description && (
+                              <span className="mt-1 block text-xs opacity-90">{styleOption.description}</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {product.fabrics && product.fabrics.length > 0 && (
               <div>
-                <h3 className="mb-3 font-medium">Headboard Style</h3>
-                <div className="flex flex-wrap gap-2">
-                  {product.styles[0].options.map((style) => (
+                <h3 className="mb-3 font-medium">Fabric: <span className="text-primary">{selectedFabric}</span></h3>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {product.fabrics.map((fabric) => (
                     <button
-                      key={style}
-                      onClick={() => setSelectedHeadboard(style)}
-                      className={`rounded-md border px-4 py-2 text-sm transition-all ${
-                        selectedHeadboard === style
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border hover:border-primary'
+                      key={fabric.id}
+                      onClick={() => setSelectedFabric(fabric.name)}
+                      className={`rounded-xl border p-2 text-left transition-all ${
+                        selectedFabric === fabric.name
+                          ? 'border-primary ring-2 ring-primary/20'
+                          : 'border-border hover:border-primary/60'
                       }`}
                     >
-                      {style}
+                      <img
+                        src={fabric.image_url}
+                        alt={fabric.name}
+                        className="mb-2 h-24 w-full rounded-md object-cover"
+                      />
+                      <span className="line-clamp-2 text-xs font-medium">{fabric.name}</span>
                     </button>
                   ))}
                 </div>

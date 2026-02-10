@@ -16,6 +16,21 @@ import { toast } from 'sonner';
 
 type CheckoutStep = 'information' | 'payment' | 'confirmation';
 
+const getVariantsKey = (item: { selectedVariants?: Record<string, string>; fabric?: string }) =>
+  JSON.stringify({
+    selectedVariants: item.selectedVariants || {},
+    fabric: item.fabric || '',
+  });
+
+const getVariantSummary = (item: { selectedVariants?: Record<string, string>; fabric?: string }) => {
+  const variantSummary = Object.entries(item.selectedVariants || {})
+    .map(([group, value]) => `${group}: ${value}`)
+    .join(' | ');
+  if (item.fabric && variantSummary) return `${variantSummary} | Fabric: ${item.fabric}`;
+  if (item.fabric) return `Fabric: ${item.fabric}`;
+  return variantSummary;
+};
+
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const { state, totalPrice, clearCart } = useCart();
@@ -106,7 +121,7 @@ const CheckoutPage = () => {
           price: item.product.price,
           size: item.size,
           color: item.color,
-          style: item.headboardStyle || '',
+          style: getVariantSummary(item),
         })),
       };
 
@@ -439,7 +454,7 @@ const CheckoutPage = () => {
                 <div className="space-y-4">
                   {state.items.map((item) => (
                     <div
-                      key={`${item.product.id}-${item.size}-${item.color}`}
+                      key={`${item.product.id}-${item.size}-${item.color}-${getVariantsKey(item)}`}
                       className="flex gap-3"
                     >
                       <div className="relative">
@@ -457,6 +472,9 @@ const CheckoutPage = () => {
                         <p className="text-xs text-muted-foreground">
                           {item.size} / {item.color}
                         </p>
+                        {getVariantSummary(item) && (
+                          <p className="text-xs text-muted-foreground">{getVariantSummary(item)}</p>
+                        )}
                       </div>
                       <p className="text-sm font-medium">
                         £{(item.product.price * item.quantity).toFixed(2)}

@@ -4,6 +4,21 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/context/CartContext';
 
+const getVariantsKey = (item: { selectedVariants?: Record<string, string>; fabric?: string }) =>
+  JSON.stringify({
+    selectedVariants: item.selectedVariants || {},
+    fabric: item.fabric || '',
+  });
+
+const getVariantSummary = (item: { selectedVariants?: Record<string, string>; fabric?: string }) => {
+  const variantSummary = Object.entries(item.selectedVariants || {})
+    .map(([group, value]) => `${group}: ${value}`)
+    .join(' | ');
+  if (item.fabric && variantSummary) return `${variantSummary} | Fabric: ${item.fabric}`;
+  if (item.fabric) return `Fabric: ${item.fabric}`;
+  return variantSummary;
+};
+
 const CartDrawer = () => {
   const { state, closeCart, removeItem, updateQuantity, totalItems, totalPrice } = useCart();
 
@@ -64,7 +79,7 @@ const CartDrawer = () => {
                 <div className="space-y-4">
                   {state.items.map((item) => (
                     <motion.div
-                      key={`${item.product.id}-${item.size}-${item.color}`}
+                      key={`${item.product.id}-${item.size}-${item.color}-${getVariantsKey(item)}`}
                       layout
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -87,6 +102,9 @@ const CartDrawer = () => {
                         <p className="text-sm text-muted-foreground">
                           {item.size} • {item.color}
                         </p>
+                        {getVariantSummary(item) && (
+                          <p className="mt-1 text-xs text-muted-foreground">{getVariantSummary(item)}</p>
+                        )}
                         <p className="mt-1 font-semibold text-primary">
                           £{item.product.price}
                         </p>
@@ -100,6 +118,7 @@ const CartDrawer = () => {
                                   item.product.id,
                                   item.size,
                                   item.color,
+                                  getVariantsKey(item),
                                   Math.max(1, item.quantity - 1)
                                 )
                               }
@@ -116,6 +135,7 @@ const CartDrawer = () => {
                                   item.product.id,
                                   item.size,
                                   item.color,
+                                  getVariantsKey(item),
                                   item.quantity + 1
                                 )
                               }
@@ -128,7 +148,7 @@ const CartDrawer = () => {
                           {/* Remove */}
                           <button
                             onClick={() =>
-                              removeItem(item.product.id, item.size, item.color)
+                              removeItem(item.product.id, item.size, item.color, getVariantsKey(item))
                             }
                             className="text-muted-foreground transition-colors hover:text-destructive"
                           >
