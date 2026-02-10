@@ -40,7 +40,7 @@ const CategoryPage = () => {
 
   const [sortBy, setSortBy] = useState('featured');
   const [priceRange, setPriceRange] = useState([0, 1500]);
-  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
@@ -93,11 +93,33 @@ const CategoryPage = () => {
     return value.trim().toLowerCase().replace(/^\w/, c => c.toUpperCase());
   };
 
-  // Get unique sizes and colors
-  const allSizes = useMemo(() => {
-    const sizes = new Set<string>();
-    allProducts.forEach((p) => p.sizes.forEach((s) => sizes.add(normalizeValue(s.name))));
-    return Array.from(sizes).sort();
+  // Get all style options grouped by style name
+  const allStyleOptions = useMemo(() => {
+    const styleMap = new Map<string, Set<string>>();
+    allProducts.forEach((p) => 
+      p.styles.forEach((style) => {
+        const styleName = style.name;
+        if (!styleMap.has(styleName)) {
+          styleMap.set(styleName, new Set<string>());
+        }
+        // Handle both array of objects and array of strings
+        if (Array.isArray(style.options)) {
+          style.options.forEach((opt) => {
+            const optionLabel = typeof opt === 'string' ? opt : opt.label;
+            styleMap.get(styleName)!.add(optionLabel);
+          });
+        }
+      })
+    );
+    // Convert to array format
+    const result: { styleName: string; options: string[] }[] = [];
+    styleMap.forEach((options, styleName) => {
+      result.push({
+        styleName,
+        options: Array.from(options).sort(),
+      });
+    });
+    return result;
   }, [allProducts]);
 
   const allColors = useMemo(() => {
@@ -122,10 +144,16 @@ const CategoryPage = () => {
       (p) => p.price >= priceRange[0] && p.price <= priceRange[1]
     );
 
-    // Size filter (use normalized values for comparison)
-    if (selectedSizes.length > 0) {
+    // Style options filter
+    if (selectedOptions.length > 0) {
       products = products.filter((p) =>
-        p.sizes.some((s) => selectedSizes.includes(normalizeValue(s.name)))
+        p.styles.some((style) =>
+          Array.isArray(style.options) &&
+          style.options.some((opt) => {
+            const optionLabel = typeof opt === 'string' ? opt : opt.label;
+            return selectedOptions.includes(optionLabel);
+          })
+        )
       );
     }
 
@@ -153,11 +181,11 @@ const CategoryPage = () => {
     }
 
     return products;
-  }, [allProducts, priceRange, selectedSizes, selectedColors, sortBy]);
+  }, [allProducts, priceRange, selectedOptions, selectedColors, sortBy]);
 
-  const toggleSize = (size: string) => {
-    setSelectedSizes((prev) =>
-      prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]
+  const toggleOption = (option: string) => {
+    setSelectedOptions((prev) =>
+      prev.includes(option) ? prev.filter((o) => o !== option) : [...prev, option]
     );
   };
 
@@ -169,7 +197,7 @@ const CategoryPage = () => {
 
   const clearFilters = () => {
     setPriceRange([priceBounds.min, priceBounds.max]);
-    setSelectedSizes([]);
+    setSelectedOptions([]);
     setSelectedColors([]);
   };
 
@@ -255,7 +283,7 @@ const CategoryPage = () => {
             <Button
               variant="outline"
               onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className="gap-2 border-accent lg:hidden"
+              className="gap-2 border-accent md:hidden"
             >
               <SlidersHorizontal className="h-4 w-4" />
               Filters
@@ -278,15 +306,15 @@ const CategoryPage = () => {
         </div>
 
         <div className="flex gap-8">
-          {/* Filters Sidebar - Desktop */}
-          <aside className="hidden w-64 flex-shrink-0 lg:block">
+          {/* Filters Sidebar - Desktop & Tablet */}
+          <aside className="hidden w-64 flex-shrink-0 md:block">
             <FilterContent
               priceRange={priceRange}
               setPriceRange={setPriceRange}
               priceBounds={priceBounds}
-              allSizes={allSizes}
-              selectedSizes={selectedSizes}
-              toggleSize={toggleSize}
+              allStyleOptions={allStyleOptions}
+              selectedOptions={selectedOptions}
+              toggleOption={toggleOption}
               allColors={allColors}
               selectedColors={selectedColors}
               toggleColor={toggleColor}
@@ -320,9 +348,9 @@ const CategoryPage = () => {
                   priceRange={priceRange}
                   setPriceRange={setPriceRange}
                   priceBounds={priceBounds}
-                  allSizes={allSizes}
-                  selectedSizes={selectedSizes}
-                  toggleSize={toggleSize}
+                  allStyleOptions={allStyleOptions}
+                  selectedOptions={selectedOptions}
+                  toggleOption={toggleOption}
                   allColors={allColors}
                   selectedColors={selectedColors}
                   toggleColor={toggleColor}
@@ -366,9 +394,9 @@ interface FilterContentProps {
   priceRange: number[];
   setPriceRange: (range: number[]) => void;
   priceBounds: { min: number; max: number };
-  allSizes: string[];
-  selectedSizes: string[];
-  toggleSize: (size: string) => void;
+  allStyleOptions: { styleName: string; options: string[] }[];
+  selectedOptions: string[];
+  toggleOption: (option: string) => void;
   allColors: { name: string; hex_code: string }[];
   selectedColors: string[];
   toggleColor: (color: string) => void;
@@ -379,9 +407,9 @@ const FilterContent = ({
   priceRange,
   setPriceRange,
   priceBounds,
-  allSizes,
-  selectedSizes,
-  toggleSize,
+  allStyleOptions,
+  selectedOptions,
+  toggleOption,
   allColors,
   selectedColors,
   toggleColor,
@@ -406,24 +434,26 @@ const FilterContent = ({
         </div>
       </div>
 
-      {/* Sizes */}
-      <div>
-        <h4 className="mb-4 font-serif text-lg font-semibold">Size</h4>
-        <div className="space-y-3">
-          {allSizes.map((size) => (
-            <div key={size} className="flex items-center gap-2">
-              <Checkbox
-                id={`size-${size}`}
-                checked={selectedSizes.includes(size)}
-                onCheckedChange={() => toggleSize(size)}
-              />
-              <Label htmlFor={`size-${size}`} className="text-sm">
-                {size}
-              </Label>
-            </div>
-          ))}
+      {/* Style Options */}
+      {allStyleOptions.map((styleGroup) => (
+        <div key={styleGroup.styleName}>
+          <h4 className="mb-4 font-serif text-lg font-semibold">{styleGroup.styleName}</h4>
+          <div className="space-y-3">
+            {styleGroup.options.map((option) => (
+              <div key={option} className="flex items-center gap-2">
+                <Checkbox
+                  id={`option-${option}`}
+                  checked={selectedOptions.includes(option)}
+                  onCheckedChange={() => toggleOption(option)}
+                />
+                <Label htmlFor={`option-${option}`} className="text-sm cursor-pointer">
+                  {option}
+                </Label>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      ))}
 
       {/* Colors */}
       <div>
