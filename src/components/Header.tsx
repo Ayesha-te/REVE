@@ -59,6 +59,15 @@ const Header = () => {
       } catch {
         setNavLinks([
           { name: 'Home', href: '/' },
+          {
+            name: 'Beds',
+            href: '#',
+            children: [
+              { name: 'Divan Beds', href: '/divan-beds', description: 'Luxury divan beds with storage options' },
+              { name: 'Ottoman Beds', href: '/category/ottoman-beds', description: 'Elegant lift-up storage beds' },
+              { name: 'Upholstered Beds', href: '/category/upholstered-beds', description: 'Premium fabric bed frames' },
+            ],
+          },
           { name: 'About Us', href: '/about' },
           { name: 'Contact Us', href: '/contact' },
         ]);
