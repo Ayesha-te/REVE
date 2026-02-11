@@ -70,6 +70,17 @@ const CategoryPage = () => {
     load();
   }, [slug, subSlug]);
 
+  const selectedSubcategory = useMemo(() => {
+    if (!category || !subSlug) {
+      return null;
+    }
+    return category.subcategories?.find((sub) => sub.slug === subSlug) || null;
+  }, [category, subSlug]);
+
+  const heroName = selectedSubcategory?.name || category?.name || '';
+  const heroDescription = selectedSubcategory?.description || category?.description || '';
+  const heroImage = selectedSubcategory?.image || category?.image || '';
+
   const priceBounds = useMemo(() => {
     const prices = allProducts
       .map((p) => Number(p.price))
@@ -240,7 +251,7 @@ const CategoryPage = () => {
       <section className="relative h-64 overflow-hidden md:h-80">
         <div
           className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${category.image})` }}
+          style={{ backgroundImage: `url(${heroImage})` }}
         >
           <div className="absolute inset-0 bg-espresso/60" />
         </div>
@@ -251,14 +262,22 @@ const CategoryPage = () => {
               Home
             </Link>
             <ChevronRight className="h-4 w-4" />
-            <span className="text-cream">{category.name}</span>
+            <Link to={`/category/${category.slug}`} className="hover:text-cream">
+              {category.name}
+            </Link>
+            {selectedSubcategory && (
+              <>
+                <ChevronRight className="h-4 w-4" />
+                <span className="text-cream">{selectedSubcategory.name}</span>
+              </>
+            )}
           </nav>
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="mb-4 font-serif text-4xl font-bold text-cream md:text-5xl"
           >
-            {category.name}
+            {heroName}
           </motion.h1>
           <motion.p
             initial={{ opacity: 0, y: 20 }}
@@ -266,7 +285,7 @@ const CategoryPage = () => {
             transition={{ delay: 0.1 }}
             className="max-w-2xl text-cream/90"
           >
-            {category.description}
+            {heroDescription}
           </motion.p>
         </div>
       </section>
