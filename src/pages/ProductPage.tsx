@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -26,24 +26,32 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import ProductCard from '@/components/ProductCard';
 import { apiGet } from '@/lib/api';
-import { Category, Product, FilterType } from '@/lib/types';
+import { Category, Product } from '@/lib/types';
 import { useCart } from '@/context/CartContext';
 import { toast } from 'sonner';
-
-// Helper function to determine if a hex color is light
-const isLightColor = (hexColor: string): boolean => {
-  const hex = hexColor.replace('#', '');
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.5;
-};
 
 type NormalizedStyleOption = {
   label: string;
   description?: string;
   icon_url?: string;
+};
+
+type VariantOption = {
+  key: string;
+  label: string;
+  description?: string;
+  icon_url?: string;
+  color_code?: string;
+  price_delta?: number;
+};
+
+type VariantGroup = {
+  key: string;
+  name: string;
+  icon_url?: string;
+  kind: 'color' | 'size' | 'style';
+  styleName?: string;
+  options: VariantOption[];
 };
 
 type ParsedSizeOption = {
@@ -121,6 +129,15 @@ const normalizeStyleOptions = (options: unknown): NormalizedStyleOption[] => {
     .filter((option): option is NormalizedStyleOption => Boolean(option));
 };
 
+const parsePriceDeltaFromText = (label = '', description = ''): number => {
+  const text = `${label} ${description}`;
+  const plusMatch = text.match(/\+\s*£?\s*(\d+(\.\d+)?)/i);
+  if (plusMatch) return Number(plusMatch[1] || 0);
+  const pipeMatch = text.match(/\|\s*(-?\d+(\.\d+)?)/);
+  if (pipeMatch) return Number(pipeMatch[1] || 0);
+  return 0;
+};
+
 const isInlineSvgMarkup = (value?: string): boolean => {
   const v = (value || '').trim();
   return v.startsWith('<svg') && v.endsWith('</svg>');
@@ -150,7 +167,7 @@ const ProductPage = () => {
   const [selectedColor, setSelectedColor] = useState('');
   const [selectedStyles, setSelectedStyles] = useState<Record<string, string>>({});
   const [selectedFabric, setSelectedFabric] = useState('');
-  const [selectedFilterOptions, setSelectedFilterOptions] = useState<Record<string, string>>({});
+  const [activeVariantGroupKey, setActiveVariantGroupKey] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [isZoomed, setIsZoomed] = useState(false);
 
@@ -164,7 +181,12 @@ const ProductPage = () => {
       }
       try {
         const productRes = await apiGet<Product[]>(`/products/?slug=${slug}`);
-        const fetched = productRes[0] || null;
+        const normalizedProducts = Array.isArray(productRes)
+          ? productRes
+          : Array.isArray((productRes as unknown as { results?: Product[] })?.results)
+          ? (productRes as unknown as { results: Product[] }).results
+          : [];
+        const fetched = normalizedProducts[0] || null;
         setProduct(fetched);
         if (fetched?.category_slug) {
           const categoryRes = await apiGet<Category[]>(`/categories/?slug=${fetched.category_slug}`);
@@ -194,21 +216,6 @@ const ProductPage = () => {
         } else {
           setSelectedFabric('');
         }
-        if (fetched?.filters?.length) {
-          const defaults: Record<string, string> = {};
-          fetched.filters.forEach((f) => {
-            const first = f.options?.[0];
-            if (first) {
-              defaults[f.slug] = first.slug;
-              if (f.slug === 'size' && first.name) {
-                setSelectedSize(first.name);
-              }
-            }
-          });
-          setSelectedFilterOptions(defaults);
-        } else {
-          setSelectedFilterOptions({});
-        }
         setIsLoading(false);
       } catch {
         setProduct(null);
@@ -217,6 +224,73 @@ const ProductPage = () => {
     };
     load();
   }, [slug]);
+
+  const productImages = product?.images || [];
+  const productSizes = product?.sizes || [];
+  const sizeOptions = productSizes.map((size, index) => parseSizeOption(size.name, index, size.description || ''));
+
+  const styleVariantGroups = useMemo<VariantGroup[]>(
+    () =>
+      (product?.styles || [])
+        .map((styleGroup) => {
+          const options = normalizeStyleOptions(styleGroup.options).map((option, idx) => ({
+            key: `${styleGroup.id}-${idx}`,
+            label: option.label,
+            description: option.description,
+            icon_url: option.icon_url,
+            price_delta: parsePriceDeltaFromText(option.label, option.description),
+          }));
+          return {
+            key: `style:${styleGroup.name}`,
+            name: styleGroup.name,
+            icon_url: styleGroup.icon_url,
+            kind: 'style' as const,
+            styleName: styleGroup.name,
+            options,
+          };
+        })
+        .filter((group) => group.options.length > 0),
+    [product?.styles]
+  );
+
+  const variantGroups = useMemo<VariantGroup[]>(() => {
+    const groups: VariantGroup[] = [];
+    if ((product?.colors || []).length > 0) {
+      groups.push({
+        key: 'color',
+        name: 'Colour',
+        kind: 'color',
+        options: (product?.colors || []).map((color) => ({
+          key: `color-${color.id}`,
+          label: color.name,
+          color_code: color.hex_code,
+          price_delta: 0,
+        })),
+      });
+    }
+    if (sizeOptions.length > 0) {
+      groups.push({
+        key: 'size',
+        name: 'Size',
+        kind: 'size',
+        options: sizeOptions.map((size) => ({
+          key: size.id,
+          label: size.label,
+          description: size.description,
+          price_delta: size.delta,
+        })),
+      });
+    }
+    groups.push(...styleVariantGroups);
+    return groups;
+  }, [product?.colors, sizeOptions, styleVariantGroups]);
+
+  useEffect(() => {
+    if (!variantGroups.length) return;
+    if (!activeVariantGroupKey || !variantGroups.some((group) => group.key === activeVariantGroupKey)) {
+      setActiveVariantGroupKey(variantGroups[0].key);
+    }
+  }, [variantGroups, activeVariantGroupKey]);
 
   if (!product && !isLoading) {
     return (
@@ -248,31 +322,32 @@ const ProductPage = () => {
     );
   }
 
-  const sizeOptions = product.sizes.map((size, index) => parseSizeOption(size.name, index, size.description || ''));
   const activeSizeOption = sizeOptions.find((size) => size.label === selectedSize) || sizeOptions[0];
   const sizeDelta = activeSizeOption?.delta || 0;
 
-  const findSelectedOption = (filter: FilterType) => {
-    if (filter.slug === 'size') {
-      return filter.options.find((opt) => opt.name === selectedSize) || filter.options[0];
+  const getSelectedOptionForGroup = (group: VariantGroup): VariantOption | undefined => {
+    if (group.kind === 'color') {
+      return group.options.find((option) => option.label === selectedColor) || group.options[0];
     }
-    const selectedSlug = selectedFilterOptions[filter.slug];
-    return filter.options.find((opt) => opt.slug === selectedSlug) || filter.options[0];
+    if (group.kind === 'size') {
+      return group.options.find((option) => option.label === selectedSize) || group.options[0];
+    }
+    const styleName = group.styleName || group.name;
+    return group.options.find((option) => option.label === selectedStyles[styleName]) || group.options[0];
   };
 
-  const filterPriceDelta = (product.filters || []).reduce((sum, filter) => {
-    if (filter.slug === 'size') return sum;
-    const opt = findSelectedOption(filter);
-    return sum + (opt?.price_delta ? Number(opt.price_delta) : 0);
+  const stylePriceDelta = styleVariantGroups.reduce((sum, group) => {
+    const selected = getSelectedOptionForGroup(group);
+    return sum + Number(selected?.price_delta || 0);
   }, 0);
 
-  const wingbackSelected = (product.filters || []).some((filter) => {
-    const opt = findSelectedOption(filter);
-    return opt?.is_wingback;
+  const wingbackSelected = styleVariantGroups.some((group) => {
+    const selected = getSelectedOptionForGroup(group);
+    return /wingback/i.test(`${selected?.label || ''} ${selected?.description || ''}`);
   });
 
-  const unitPrice = product.price + sizeDelta + filterPriceDelta;
-  const unitOriginalPrice = product.original_price ? product.original_price + sizeDelta + filterPriceDelta : undefined;
+  const unitPrice = product.price + sizeDelta + stylePriceDelta;
+  const unitOriginalPrice = product.original_price ? product.original_price + sizeDelta + stylePriceDelta : undefined;
   const totalPrice = unitPrice * quantity;
   const savingsPerUnit = unitOriginalPrice && unitOriginalPrice > unitPrice ? unitOriginalPrice - unitPrice : 0;
 
@@ -281,9 +356,11 @@ const ProductPage = () => {
   const dimensionsRows = (product.features || []).filter((feature) =>
     /(dimension|height|width|length|depth|cm|mm|inch|ft)/i.test(feature)
   );
-  const dimensionTableRows = (product.dimensions || []).filter(
+  const dimensionTableRows = (product.computed_dimensions || product.dimensions || []).filter(
     (row) => row?.measurement && row?.values && Object.keys(row.values).length > 0
   );
+  const activeVariantGroup =
+    variantGroups.find((group) => group.key === activeVariantGroupKey) || variantGroups[0];
   const dimensionColumns =
     dimensionTableRows.length > 0
       ? DIMENSION_SIZE_COLUMNS.filter((size) =>
@@ -332,7 +409,7 @@ const ProductPage = () => {
               <AnimatePresence mode="wait">
                 <motion.img
                   key={selectedImage}
-                  src={product.images[selectedImage]?.url}
+                  src={productImages[selectedImage]?.url}
                   alt={product.name}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1, scale: isZoomed ? 1.5 : 1 }}
@@ -355,9 +432,9 @@ const ProductPage = () => {
               </div>
             </motion.div>
 
-            {product.images.length > 1 && (
+            {productImages.length > 1 && (
               <div className="grid grid-cols-5 gap-3">
-                {product.images.map((img, index) => (
+                {productImages.map((img, index) => (
                   <button
                     key={index}
                     onClick={() => setSelectedImage(index)}
@@ -419,125 +496,108 @@ const ProductPage = () => {
               <p className="mt-2 text-sm text-muted-foreground">Price updates automatically when you select a size.</p>
             </div>
 
-            {(product.filters || []).length > 0 && (
+            {variantGroups.length > 0 && (
               <div className="space-y-4 rounded-xl border border-border bg-card p-4">
                 <div className="grid gap-3 sm:grid-cols-3 md:grid-cols-5">
-                  {(product.filters || []).map((filter) => {
-                    const opt = findSelectedOption(filter);
+                  {variantGroups.map((group) => {
+                    const selected = getSelectedOptionForGroup(group);
                     return (
-                      <div key={filter.id} className="rounded-lg border border-border bg-background p-3">
+                      <button
+                        key={group.key}
+                        type="button"
+                        onClick={() => setActiveVariantGroupKey(group.key)}
+                        className={`rounded-lg border bg-background p-3 text-left ${
+                          activeVariantGroup?.key === group.key
+                            ? 'border-primary ring-2 ring-primary/20'
+                            : 'border-border'
+                        }`}
+                      >
                         <div className="mb-2 flex items-center gap-2">
-                          <IconVisual icon={filter.icon_url} alt={filter.name} className="h-6 w-6 object-contain" />
-                          <span className="text-sm font-medium">{filter.name}</span>
+                          <IconVisual icon={group.icon_url} alt={group.name} className="h-6 w-6 object-contain" />
+                          <span className="text-sm font-medium">{group.name}</span>
                         </div>
                         <p className="text-xs text-muted-foreground line-clamp-2">
-                          {opt?.name || 'Select'}
+                          {selected?.label || 'Select'}
                         </p>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
 
-                {(product.filters || []).map((filter) => {
-                  const selected = findSelectedOption(filter);
-                  return (
-                    <div key={`options-${filter.id}`} className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-medium">{filter.name}</h3>
-                        {filter.display_hint && (
-                          <span className="text-xs text-muted-foreground">{filter.display_hint}</span>
-                        )}
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {filter.options.map((opt) => {
-                          const isSelected =
-                            filter.slug === 'size'
-                              ? selectedSize === opt.name
-                              : (selectedFilterOptions[filter.slug] || selected?.slug) === opt.slug;
-                          return (
-                            <button
-                              key={opt.id}
-                              onClick={() => {
-                                if (filter.slug === 'size') {
-                                  setSelectedSize(opt.name);
-                                } else {
-                                  setSelectedFilterOptions((prev) => ({ ...prev, [filter.slug]: opt.slug }));
-                                }
-                              }}
-                              className={`rounded-lg border p-4 text-left transition-all ${
-                                isSelected
-                                  ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-                                  : 'border-border hover:border-primary/60'
-                              }`}
-                            >
-                          <div className="mb-2 flex items-center justify-between">
-                                <IconVisual icon={opt.icon_url} alt={opt.name} className="h-6 w-6 object-contain" />
-                            {isSelected && <CheckCircle2 className="h-5 w-5 text-primary" />}
-                          </div>
-                          <p className="font-medium">{opt.name}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {opt.price_delta && Number(opt.price_delta) !== 0
-                              ? `+${formatPrice(Number(opt.price_delta))}`
-                              : 'Included'}
-                              </p>
-                              {opt.is_wingback && (
-                                <p className="mt-1 text-[11px] text-amber-700">
-                                  Wingback adds {product.wingback_width_delta_cm || 4} cm width
-                                </p>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
+                {activeVariantGroup && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-medium">{activeVariantGroup.name}</h3>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {sizeOptions.length > 0 && (
-              <div>
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="font-medium">Size</h3>
-                  {(dimensionTableRows.length > 0 || dimensionsRows.length > 0) && (
-                    <button
-                      type="button"
-                      className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-                      onClick={() =>
-                        document.getElementById('dimensions-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                      }
-                    >
-                      View dimensions
-                    </button>
-                  )}
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {sizeOptions.map((size) => (
-                    <button
-                      key={size.id}
-                      onClick={() => setSelectedSize(size.label)}
-                      className={`rounded-lg border p-4 text-left transition-all ${
-                        activeSizeOption?.label === size.label
-                          ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-                          : 'border-border hover:border-primary/60'
-                      }`}
-                    >
-                      <div className="mb-2 flex items-center justify-between">
-                        <BedDouble className="h-5 w-5 text-muted-foreground" />
-                        {activeSizeOption?.label === size.label && (
-                          <CheckCircle2 className="h-5 w-5 text-primary" />
-                        )}
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {activeVariantGroup.options.map((option) => {
+                        const selected = getSelectedOptionForGroup(activeVariantGroup);
+                        const isSelected = selected?.key === option.key;
+                        return (
+                          <button
+                            key={option.key}
+                            onClick={() => {
+                              if (activeVariantGroup.kind === 'color') {
+                                setSelectedColor(option.label);
+                                return;
+                              }
+                              if (activeVariantGroup.kind === 'size') {
+                                setSelectedSize(option.label);
+                                return;
+                              }
+                              const styleName = activeVariantGroup.styleName || activeVariantGroup.name;
+                              setSelectedStyles((prev) => ({ ...prev, [styleName]: option.label }));
+                            }}
+                            className={`rounded-lg border p-4 text-left transition-all ${
+                              isSelected
+                                ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                                : 'border-border hover:border-primary/60'
+                            }`}
+                          >
+                            <div className="mb-2 flex items-center justify-between">
+                              {activeVariantGroup.kind === 'color' ? (
+                                <span
+                                  className="h-6 w-6 rounded-full border border-border"
+                                  style={{ backgroundColor: option.color_code || '#888888' }}
+                                />
+                              ) : (
+                                <IconVisual icon={option.icon_url || activeVariantGroup.icon_url} alt={option.label} className="h-6 w-6 object-contain" />
+                              )}
+                              {isSelected && <CheckCircle2 className="h-5 w-5 text-primary" />}
+                            </div>
+                            <p className="font-medium">{option.label}</p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {Number(option.price_delta || 0) > 0
+                                ? `+${formatPrice(Number(option.price_delta || 0))}`
+                                : 'Included'}
+                            </p>
+                            {option.description && (
+                              <p className="mt-1 text-xs text-muted-foreground">{option.description}</p>
+                            )}
+                            {/wingback/i.test(`${option.label} ${option.description || ''}`) && (
+                              <p className="mt-1 text-[11px] text-amber-700">
+                                Wingback adds {product.wingback_width_delta_cm || 4} cm width
+                              </p>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {(dimensionTableRows.length > 0 || dimensionsRows.length > 0) && (
+                      <div className="flex justify-center">
+                        <button
+                          type="button"
+                          className="rounded-md border border-border px-6 py-2 text-sm font-medium hover:bg-muted"
+                          onClick={() =>
+                            document.getElementById('dimensions-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                          }
+                        >
+                          View Dimensions
+                        </button>
                       </div>
-                      <p className="font-medium">{size.label}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {size.delta > 0 ? `+${formatPrice(size.delta)}` : 'Included in base price'}
-                      </p>
-                      {size.description && (
-                        <p className="mt-1 text-xs text-muted-foreground">{size.description}</p>
-                      )}
-                    </button>
-                  ))}
-                </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -567,86 +627,6 @@ const ProductPage = () => {
               </div>
             )}
 
-            {product.colors && product.colors.length > 0 && (
-              <div>
-                <h3 className="mb-3 font-medium">Select Colour: <span className="text-primary">{selectedColor}</span></h3>
-                <div className="flex flex-wrap gap-3">
-                  {product.colors.map((color) => (
-                    <button
-                      key={color.id}
-                      onClick={() => setSelectedColor(color.name)}
-                      className={`group relative flex h-10 w-10 items-center justify-center rounded-full transition-all ${
-                        selectedColor === color.name
-                          ? 'ring-2 ring-primary ring-offset-2'
-                          : 'hover:ring-2 hover:ring-muted-foreground hover:ring-offset-2'
-                      }`}
-                      title={color.name}
-                    >
-                      <span
-                        className="h-8 w-8 rounded-full border border-border shadow-sm"
-                        style={{ backgroundColor: color.hex_code || '#888888' }}
-                      />
-                      {selectedColor === color.name && (
-                        <span className="absolute inset-0 flex items-center justify-center">
-                          <svg
-                            className="h-4 w-4 drop-shadow-md"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke={color.hex_code && isLightColor(color.hex_code) ? '#000000' : '#FFFFFF'}
-                            strokeWidth="3"
-                          >
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {product.styles && product.styles.length > 0 && (
-              <div className="space-y-6">
-                {product.styles.map((styleGroup) => {
-                  const options = normalizeStyleOptions(styleGroup.options);
-                  if (options.length === 0) return null;
-                  const isHeadboard = styleGroup.name.toLowerCase().includes('headboard');
-                  return (
-                    <div key={styleGroup.id}>
-                      <div className="mb-3 flex items-center gap-2">
-                        <IconVisual icon={styleGroup.icon_url} alt={styleGroup.name} className="h-6 w-6 object-contain" />
-                        <h3 className="font-medium">{styleGroup.name}</h3>
-                      </div>
-                      <div className={isHeadboard ? 'grid gap-3 sm:grid-cols-2' : 'space-y-2'}>
-                        {options.map((styleOption) => (
-                          <button
-                            key={`${styleGroup.id}-${styleOption.label}`}
-                            onClick={() =>
-                              setSelectedStyles((prev) => ({ ...prev, [styleGroup.name]: styleOption.label }))
-                            }
-                            className={`rounded-md border px-4 py-3 text-left text-sm transition-all ${
-                              selectedStyles[styleGroup.name] === styleOption.label
-                                ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-                                : 'border-border hover:border-primary'
-                            }`}
-                          >
-                            <div className="mb-1 flex items-center gap-2">
-                              {styleOption.icon_url ? (
-                                <IconVisual icon={styleOption.icon_url} alt={styleOption.label} className="h-5 w-5 object-contain" />
-                              ) : null}
-                              <span className="block font-medium">{styleOption.label}</span>
-                            </div>
-                            {styleOption.description && (
-                              <span className="mt-1 block text-xs text-muted-foreground">{styleOption.description}</span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
 
             <div className="flex flex-col gap-4 sm:flex-row">
               <div className="flex items-center rounded-md border border-border">

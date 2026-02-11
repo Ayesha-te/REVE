@@ -88,7 +88,12 @@ const CategoryPage = () => {
         const productsRes = subSlug
           ? await apiGet<Product[]>(`/products/?subcategory=${subSlug}`)
           : await apiGet<Product[]>(`/products/?category=${slug}`);
-        setAllProducts(productsRes);
+        const normalizedProducts = Array.isArray(productsRes)
+          ? productsRes
+          : Array.isArray((productsRes as unknown as { results?: Product[] })?.results)
+          ? (productsRes as unknown as { results: Product[] }).results
+          : [];
+        setAllProducts(normalizedProducts);
         setIsLoading(false);
       } catch {
         setCategory(null);
@@ -140,7 +145,7 @@ const CategoryPage = () => {
   const allSizes = useMemo(() => {
     const sizeSet = new Set<string>();
     allProducts.forEach((p) =>
-      p.sizes.forEach((s) => {
+      (p.sizes || []).forEach((s) => {
         const value = s.name.trim();
         if (value) sizeSet.add(value);
       })
@@ -160,7 +165,7 @@ const CategoryPage = () => {
     // Size filter
     if (selectedSizes.length > 0) {
       products = products.filter((p) =>
-        p.sizes.some((size) => selectedSizes.includes(size.name))
+        (p.sizes || []).some((size) => selectedSizes.includes(size.name))
       );
     }
 
