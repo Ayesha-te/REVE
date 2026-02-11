@@ -18,7 +18,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import ProductCard from '@/components/ProductCard';
 import { apiGet } from '@/lib/api';
-import { Category, Product, SubCategory, FilterType } from '@/lib/types';
+import { Category, Product, SubCategory } from '@/lib/types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -59,13 +59,11 @@ const CategoryPage = () => {
   const [subcategories, setSubcategories] = useState<SubCategory[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [filters, setFilters] = useState<FilterType[]>([]);
 
   const [sortBy, setSortBy] = useState('featured');
   const [priceRange, setPriceRange] = useState([0, 1500]);
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const sizeFilter = useMemo(() => filters.find((f) => f.slug === 'size'), [filters]);
 
   useEffect(() => {
     const load = async () => {
@@ -84,15 +82,8 @@ const CategoryPage = () => {
         if (categoryItem) {
           const subcategoryRes = await apiGet<SubCategory[]>(`/subcategories/?category=${categoryItem.id}`);
           setSubcategories(subcategoryRes);
-          try {
-            const filterRes = await apiGet<{ filters: FilterType[] }>(`/categories/${categoryItem.slug}/filters/`);
-            setFilters(filterRes.filters || []);
-          } catch {
-            setFilters([]);
-          }
         } else {
           setSubcategories([]);
-          setFilters([]);
         }
         const productsRes = subSlug
           ? await apiGet<Product[]>(`/products/?subcategory=${subSlug}`)
@@ -103,7 +94,6 @@ const CategoryPage = () => {
         setCategory(null);
         setSubcategories([]);
         setAllProducts([]);
-        setFilters([]);
         setIsLoading(false);
       }
     };
@@ -148,11 +138,6 @@ const CategoryPage = () => {
   }, [priceBounds.min, priceBounds.max]);
 
   const allSizes = useMemo(() => {
-    // Prefer dynamic filter type with slug "size"
-    const sizeFilter = filters.find((f) => f.slug === 'size');
-    if (sizeFilter?.options?.length) {
-      return sizeFilter.options.map((opt) => opt.name);
-    }
     const sizeSet = new Set<string>();
     allProducts.forEach((p) =>
       p.sizes.forEach((s) => {
@@ -331,7 +316,6 @@ const CategoryPage = () => {
               allSizes={allSizes}
               selectedSizes={selectedSizes}
               toggleSize={toggleSize}
-              sizeFilter={sizeFilter}
               clearFilters={clearFilters}
             />
           </aside>
@@ -365,7 +349,6 @@ const CategoryPage = () => {
                   allSizes={allSizes}
                   selectedSizes={selectedSizes}
                   toggleSize={toggleSize}
-                  sizeFilter={sizeFilter}
                   clearFilters={clearFilters}
                 />
               </motion.div>
@@ -409,7 +392,6 @@ interface FilterContentProps {
   allSizes: string[];
   selectedSizes: string[];
   toggleSize: (size: string) => void;
-  sizeFilter?: FilterType | null;
   clearFilters: () => void;
 }
 
@@ -420,7 +402,6 @@ const FilterContent = ({
   allSizes,
   selectedSizes,
   toggleSize,
-  sizeFilter,
   clearFilters,
 }: FilterContentProps) => {
   return (
@@ -445,53 +426,20 @@ const FilterContent = ({
       {/* Sizes */}
       <div>
         <h4 className="mb-4 font-serif text-lg font-semibold">Size</h4>
-        {sizeFilter && sizeFilter.options.length > 0 ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {sizeFilter.options.map((opt) => (
-              <button
-                key={opt.id}
-                onClick={() => toggleSize(opt.name)}
-                className={`rounded-lg border p-3 text-left transition-all ${
-                  selectedSizes.includes(opt.name)
-                    ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
-                    : 'border-border hover:border-primary/60'
-                }`}
-              >
-                <div className="mb-2 flex items-center justify-between">
-                  {opt.icon_url ? (
-                    <img src={opt.icon_url} alt={opt.name} className="h-6 w-6 object-contain" />
-                  ) : (
-                    <span className="text-muted-foreground text-xs uppercase">Size</span>
-                  )}
-                  {selectedSizes.includes(opt.name) && (
-                    <span className="text-xs font-semibold text-primary">Selected</span>
-                  )}
-                </div>
-                <p className="font-medium">{opt.name}</p>
-                {opt.price_delta && Number(opt.price_delta) !== 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {Number(opt.price_delta) > 0 ? `+£${Number(opt.price_delta).toFixed(2)}` : `-£${Math.abs(Number(opt.price_delta)).toFixed(2)}`}
-                  </p>
-                )}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {allSizes.map((size) => (
-              <div key={size} className="flex items-center gap-2">
-                <Checkbox
-                  id={`size-${size}`}
-                  checked={selectedSizes.includes(size)}
-                  onCheckedChange={() => toggleSize(size)}
-                />
-                <Label htmlFor={`size-${size}`} className="cursor-pointer text-sm">
-                  {size}
-                </Label>
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="space-y-3">
+          {allSizes.map((size) => (
+            <div key={size} className="flex items-center gap-2">
+              <Checkbox
+                id={`size-${size}`}
+                checked={selectedSizes.includes(size)}
+                onCheckedChange={() => toggleSize(size)}
+              />
+              <Label htmlFor={`size-${size}`} className="cursor-pointer text-sm">
+                {size}
+              </Label>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Clear Filters */}

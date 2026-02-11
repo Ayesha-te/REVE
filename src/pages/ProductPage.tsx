@@ -43,6 +43,7 @@ const isLightColor = (hexColor: string): boolean => {
 type NormalizedStyleOption = {
   label: string;
   description?: string;
+  icon_url?: string;
 };
 
 type ParsedSizeOption = {
@@ -111,7 +112,9 @@ const normalizeStyleOptions = (options: unknown): NormalizedStyleOption[] => {
         if (!label) return null;
         const rawDescription = (option as { description?: unknown }).description;
         const description = typeof rawDescription === 'string' ? rawDescription.trim() : '';
-        return { label, description };
+        const rawIcon = (option as { icon_url?: unknown }).icon_url;
+        const icon_url = typeof rawIcon === 'string' ? rawIcon.trim() : '';
+        return { label, description, icon_url };
       }
       return null;
     })
@@ -456,19 +459,19 @@ const ProductPage = () => {
                                   : 'border-border hover:border-primary/60'
                               }`}
                             >
-                              <div className="mb-2 flex items-center justify-between">
-                                {opt.icon_url ? (
-                                  <img src={opt.icon_url} alt={opt.name} className="h-6 w-6 object-contain" />
-                                ) : (
-                                  <BedDouble className="h-5 w-5 text-muted-foreground" />
-                                )}
-                                {isSelected && <CheckCircle2 className="h-5 w-5 text-primary" />}
-                              </div>
-                              <p className="font-medium">{opt.name}</p>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {opt.price_delta && Number(opt.price_delta) !== 0
-                                  ? `+${formatPrice(Number(opt.price_delta))}`
-                                  : 'Included'}
+                          <div className="mb-2 flex items-center justify-between">
+                            {opt.icon_url ? (
+                              <img src={opt.icon_url} alt={opt.name} className="h-6 w-6 object-contain" />
+                            ) : (
+                              <BedDouble className="h-5 w-5 text-muted-foreground" />
+                            )}
+                            {isSelected && <CheckCircle2 className="h-5 w-5 text-primary" />}
+                          </div>
+                          <p className="font-medium">{opt.name}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {opt.price_delta && Number(opt.price_delta) !== 0
+                              ? `+${formatPrice(Number(opt.price_delta))}`
+                              : 'Included'}
                               </p>
                               {opt.is_wingback && (
                                 <p className="mt-1 text-[11px] text-amber-700">
@@ -603,7 +606,14 @@ const ProductPage = () => {
                   const isHeadboard = styleGroup.name.toLowerCase().includes('headboard');
                   return (
                     <div key={styleGroup.id}>
-                      <h3 className="mb-3 font-medium">{styleGroup.name}</h3>
+                      <div className="mb-3 flex items-center gap-2">
+                        {styleGroup.icon_url ? (
+                          <img src={styleGroup.icon_url} alt={styleGroup.name} className="h-6 w-6 object-contain" />
+                        ) : (
+                          <BedDouble className="h-5 w-5 text-muted-foreground" />
+                        )}
+                        <h3 className="font-medium">{styleGroup.name}</h3>
+                      </div>
                       <div className={isHeadboard ? 'grid gap-3 sm:grid-cols-2' : 'space-y-2'}>
                         {options.map((styleOption) => (
                           <button
@@ -617,7 +627,12 @@ const ProductPage = () => {
                                 : 'border-border hover:border-primary'
                             }`}
                           >
-                            <span className="block font-medium">{styleOption.label}</span>
+                            <div className="mb-1 flex items-center gap-2">
+                              {styleOption.icon_url ? (
+                                <img src={styleOption.icon_url} alt={styleOption.label} className="h-5 w-5 object-contain" />
+                              ) : null}
+                              <span className="block font-medium">{styleOption.label}</span>
+                            </div>
                             {styleOption.description && (
                               <span className="mt-1 block text-xs text-muted-foreground">{styleOption.description}</span>
                             )}
