@@ -143,9 +143,14 @@ const isInlineSvgMarkup = (value?: string): boolean => {
   return v.startsWith('<svg') && v.endsWith('</svg>');
 };
 
+const svgMarkupToDataUrl = (svgMarkup: string): string => {
+  const minified = svgMarkup.replace(/\r?\n|\r/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  return `data:image/svg+xml;utf8,${encodeURIComponent(minified)}`;
+};
+
 const IconVisual = ({ icon, alt, className }: { icon?: string; alt: string; className: string }) => {
   if (isInlineSvgMarkup(icon)) {
-    return <span className={className} aria-label={alt} dangerouslySetInnerHTML={{ __html: (icon || '').trim() }} />;
+    return <img src={svgMarkupToDataUrl((icon || '').trim())} alt={alt} className={className} />;
   }
   if (icon) {
     return <img src={icon} alt={alt} className={className} />;
