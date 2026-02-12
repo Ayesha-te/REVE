@@ -324,36 +324,6 @@ const ProductPage = () => {
     }
   }, [variantGroups, activeVariantGroupKey]);
 
-  if (!product && !isLoading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <AnnouncementBar />
-        <Header />
-        <div className="container mx-auto flex min-h-[50vh] items-center justify-center px-4">
-          <div className="text-center">
-            <h1 className="mb-4 font-serif text-3xl font-bold">Product Not Found</h1>
-            <Button asChild>
-              <Link to="/">Return Home</Link>
-            </Button>
-          </div>
-        </div>
-        <Footer />
-      </div>
-    );
-  }
-  if (!product && isLoading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <AnnouncementBar />
-        <Header />
-        <div className="container mx-auto flex min-h-[50vh] items-center justify-center px-4">
-          <div className="text-center text-muted-foreground">Loading product...</div>
-        </div>
-        <Footer />
-      </div>
-    );
-  }
-
   const activeSizeOption = sizeOptions.find((size) => size.label === selectedSize) || sizeOptions[0];
   const sizeDelta = activeSizeOption?.delta || 0;
 
@@ -378,25 +348,29 @@ const ProductPage = () => {
     return /wingback/i.test(`${selected?.label || ''} ${selected?.description || ''}`);
   });
 
-  const unitPrice = product.price + sizeDelta + stylePriceDelta;
-  const unitOriginalPrice = product.original_price ? product.original_price + sizeDelta + stylePriceDelta : undefined;
+  const basePrice = product?.price ?? 0;
+  const baseOriginalPrice = product?.original_price ?? undefined;
+  const unitPrice = basePrice + sizeDelta + stylePriceDelta;
+  const unitOriginalPrice =
+    baseOriginalPrice !== undefined ? baseOriginalPrice + sizeDelta + stylePriceDelta : undefined;
   const totalPrice = unitPrice * quantity;
   const savingsPerUnit = unitOriginalPrice && unitOriginalPrice > unitPrice ? unitOriginalPrice - unitPrice : 0;
 
-  const fullDescription = (product.description || '').trim();
-  const shortDescription = (product.short_description || '').trim() || fullDescription.split('. ')[0] || '';
-  const dimensionsRows = (product.features || []).filter((feature) =>
+  const fullDescription = (product?.description || '').trim();
+  const shortDescription =
+    (product?.short_description || '').trim() || fullDescription.split('. ')[0] || '';
+  const dimensionsRows = (product?.features || []).filter((feature) =>
     /(dimension|height|width|length|depth|cm|mm|inch|ft)/i.test(feature)
   );
-  const rawDimensionTableRows = (product.computed_dimensions || product.dimensions || []).filter(
+  const rawDimensionTableRows = (product?.computed_dimensions || product?.dimensions || []).filter(
     (row) => row?.measurement && row?.values && Object.keys(row.values).length > 0
   );
   const adjustedDimensionTableRows = useMemo(
     () =>
       wingbackSelected
-        ? adjustDimensionsForWingback(rawDimensionTableRows, product.wingback_width_delta_cm || 4)
+        ? adjustDimensionsForWingback(rawDimensionTableRows, product?.wingback_width_delta_cm || 4)
         : rawDimensionTableRows,
-    [rawDimensionTableRows, wingbackSelected, product.wingback_width_delta_cm]
+    [rawDimensionTableRows, wingbackSelected, product?.wingback_width_delta_cm]
   );
   const dimensionColumns = useMemo(
     () =>
@@ -437,9 +411,39 @@ const ProductPage = () => {
   const activeVariantGroup =
     variantGroups.find((group) => group.key === activeVariantGroupKey) || variantGroups[0];
 
+  if (!product && !isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AnnouncementBar />
+        <Header />
+        <div className="container mx-auto flex min-h-[50vh] items-center justify-center px-4">
+          <div className="text-center">
+            <h1 className="mb-4 font-serif text-3xl font-bold">Product Not Found</h1>
+            <Button asChild>
+              <Link to="/">Return Home</Link>
+            </Button>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+  if (!product && isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AnnouncementBar />
+        <Header />
+        <div className="container mx-auto flex min-h-[50vh] items-center justify-center px-4">
+          <div className="text-center text-muted-foreground">Loading product...</div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
   const handleAddToCart = () => {
     addItem({
-      product,
+      product: product as Product,
       quantity,
       size: activeSizeOption?.label || selectedSize,
       color: selectedColor,
