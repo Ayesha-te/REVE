@@ -511,17 +511,17 @@ const ProductPage = () => {
                         key={group.key}
                         type="button"
                         onClick={() => setActiveVariantGroupKey(group.key)}
-                        className={`rounded-lg border bg-background p-3 text-left ${
+                        className={`rounded-lg border bg-background p-4 text-center ${
                           activeVariantGroup?.key === group.key
                             ? 'border-primary ring-2 ring-primary/20'
                             : 'border-border'
                         }`}
                       >
-                        <div className="mb-2 flex items-center gap-2">
-                          <IconVisual icon={group.icon_url} alt={group.name} className="h-6 w-6 object-contain" />
-                          <span className="text-sm font-medium">{group.name}</span>
+                        <div className="mb-2 flex flex-col items-center gap-2">
+                          <IconVisual icon={group.icon_url} alt={group.name} className="h-20 w-20 object-contain" />
+                          <span className="text-sm font-medium leading-snug">{group.name}</span>
                         </div>
-                        <p className="text-xs text-muted-foreground line-clamp-2">
+                        <p className="text-sm text-muted-foreground line-clamp-2">
                           {selected?.label || 'Select'}
                         </p>
                       </button>
@@ -553,37 +553,41 @@ const ProductPage = () => {
                               const styleName = activeVariantGroup.styleName || activeVariantGroup.name;
                               setSelectedStyles((prev) => ({ ...prev, [styleName]: option.label }));
                             }}
-                            className={`rounded-lg border p-4 text-left transition-all ${
+                            className={`relative rounded-lg border p-5 text-center transition-all ${
                               isSelected
                                 ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
                                 : 'border-border hover:border-primary/60'
                             }`}
                           >
-                            <div className="mb-2 flex items-center justify-between">
+                            {isSelected && <CheckCircle2 className="absolute right-3 top-3 h-5 w-5 text-primary" />}
+                            <div className="flex w-full flex-col items-center gap-3 text-center">
                               {activeVariantGroup.kind === 'color' ? (
                                 <span
-                                  className="h-6 w-6 rounded-full border border-border"
+                                  className="h-24 w-24 rounded-full border border-border"
                                   style={{ backgroundColor: option.color_code || '#888888' }}
                                 />
                               ) : (
-                                <IconVisual icon={option.icon_url || activeVariantGroup.icon_url} alt={option.label} className="h-6 w-6 object-contain" />
+                                <IconVisual
+                                  icon={option.icon_url || activeVariantGroup.icon_url}
+                                  alt={option.label}
+                                  className="h-32 w-32 object-contain"
+                                />
                               )}
-                              {isSelected && <CheckCircle2 className="h-5 w-5 text-primary" />}
-                            </div>
-                            <p className="font-medium">{option.label}</p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {Number(option.price_delta || 0) > 0
-                                ? `+${formatPrice(Number(option.price_delta || 0))}`
-                                : 'Included'}
-                            </p>
-                            {option.description && (
-                              <p className="mt-1 text-xs text-muted-foreground">{option.description}</p>
-                            )}
-                            {/wingback/i.test(`${option.label} ${option.description || ''}`) && (
-                              <p className="mt-1 text-[11px] text-amber-700">
-                                Wingback adds {product.wingback_width_delta_cm || 4} cm width
+                              <p className="max-w-full text-lg font-medium leading-snug">{option.label}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {Number(option.price_delta || 0) > 0
+                                  ? `+${formatPrice(Number(option.price_delta || 0))}`
+                                  : 'Included'}
                               </p>
-                            )}
+                              {option.description && (
+                                <p className="text-sm text-muted-foreground">{option.description}</p>
+                              )}
+                              {/wingback/i.test(`${option.label} ${option.description || ''}`) && (
+                                <p className="text-[11px] text-amber-700">
+                                  Wingback adds {product.wingback_width_delta_cm || 4} cm width
+                                </p>
+                              )}
+                            </div>
                           </button>
                         );
                       })}

@@ -142,7 +142,7 @@ const Header = () => {
                               <p className="font-medium text-foreground group-hover:text-primary">
                                 {child.name}
                               </p>
-                              <p className="mt-1 text-sm text-muted-foreground">
+                              <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
                                 {child.description}
                               </p>
                             </Link>
