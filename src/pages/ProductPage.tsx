@@ -306,14 +306,16 @@ const ProductPage = () => {
             description: option.description,
             icon_url: option.icon_url,
             size: option.size,
+            sizes: option.sizes,
             price_delta:
               typeof option.price_delta === 'number'
                 ? option.price_delta
                 : parsePriceDeltaFromText(option.label, option.description),
           }))
           .filter((opt) => {
-            if (!opt.size || !currentSize) return true;
-            return opt.size === currentSize;
+            const sizes = opt.sizes && opt.sizes.length ? opt.sizes : opt.size ? [opt.size] : [];
+            if (!currentSize || sizes.length === 0) return true;
+            return sizes.includes(currentSize);
           });
         return {
           key: `style:${styleGroup.name}`,
@@ -482,6 +484,10 @@ const ProductPage = () => {
 
   const activeVariantGroup =
     variantGroups.find((group) => group.key === activeVariantGroupKey) || variantGroups[0];
+
+  const toggleShowMore = (groupKey: string) => {
+    setShowMoreOptions((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }));
+  };
 
   if (!product && !isLoading) {
     return (
@@ -657,13 +663,15 @@ const ProductPage = () => {
                   const selected = getSelectedOptionForGroup(group);
                   const isStyleGroup = group.kind === 'style';
                   const groupEnabled = !isStyleGroup || enabledGroups[group.name] !== false;
+                  const hasMore = group.options.length > 3;
+                  const optionsToRender = showMoreOptions[group.key] ? group.options : group.options.slice(0, 3);
                   return (
                     <div key={group.key} className="space-y-3 border-b border-border/60 pb-4 last:border-0 last:pb-0">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                           <IconVisual icon={group.icon_url} alt={group.name} className="h-10 w-10 object-contain" />
                           <div>
-                            <p className="text-base font-semibold">{group.name}</p>
+                            <p className="text-base font-semibold capitalize">{group.name}</p>
                             <p className="text-xs text-muted-foreground">
                               {selected?.label ? `Selected: ${selected.label}` : 'Select an option'}
                             </p>
@@ -691,8 +699,8 @@ const ProductPage = () => {
                         )}
                       </div>
 
-                      <div className="flex flex-wrap gap-3">
-                        {group.options.map((option) => {
+                      <div className="flex gap-3 overflow-x-auto pb-2 md:flex-wrap md:overflow-visible">
+                        {optionsToRender.map((option) => {
                           const isSelected = selected?.key === option.key;
                           const disabled = isStyleGroup && !groupEnabled;
                           return (
@@ -713,7 +721,7 @@ const ProductPage = () => {
                                 setSelectedStyles((prev) => ({ ...prev, [styleName]: option.label }));
                                 setEnabledGroups((prev) => ({ ...prev, [group.name]: true }));
                               }}
-                              className={`relative flex items-center gap-3 rounded-lg border px-4 py-3 transition-all ${
+                              className={`relative flex min-w-[220px] flex-1 items-center gap-3 rounded-lg border px-4 py-3 transition-all snap-center ${
                                 disabled
                                   ? 'cursor-not-allowed opacity-40'
                                   : isSelected
@@ -736,7 +744,9 @@ const ProductPage = () => {
                               <div className="text-left">
                                 <p className="text-sm font-medium">{option.label}</p>
                                 <p className="text-xs text-muted-foreground">
-                                  {`+${formatPrice(Number(option.price_delta || 0))}`}
+                                  {Number(option.price_delta || 0) > 0
+                                    ? `+${formatPrice(Number(option.price_delta || 0))}`
+                                    : 'Included'}
                                 </p>
                                 {option.description && (
                                   <p className="text-[11px] text-muted-foreground line-clamp-2">
@@ -744,74 +754,42 @@ const ProductPage = () => {
                                   </p>
                                 )}
                               </div>
-                              {isSelected && (
-                                <>
-                                  <CheckCircle2 className="absolute right-3 top-3 h-4 w-4 text-primary" />
-                                  {group.kind === 'style' && (
-                                    <button
-                                      type="button"
-                                      className="absolute right-3 bottom-3 text-[11px] text-primary underline"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedStyles((prev) => {
-                                          const next = { ...prev };
-                                          delete next[group.name];
-                                          return next;
-                                        });
-                                      }}
-                                    >
-                                      Remove
-                                    </button>
-                                  )}
-                                </>
-                              )}
+                              {isSelected && <CheckCircle2 className="absolute right-3 top-3 h-4 w-4 text-primary" />}
                             </button>
                           );
                         })}
                       </div>
+                      {hasMore && (
+                        <button
+                          type="button"
+                          className="text-sm font-medium text-primary underline"
+                          onClick={() => toggleShowMore(group.key)}
+                        >
+                          {showMoreOptions[group.key] ? 'Show less' : 'View more'}
+                        </button>
+                      )}
                     </div>
                   );
                 })}
-
-                {(adjustedDimensionTableRows.length > 0 || dimensionsRows.length > 0) && (
-                  <div className="flex justify-center">
-                    <button
-                      type="button"
-                      className="rounded-md border border-border px-6 py-2 text-sm font-medium hover:bg-muted"
-                      onClick={() =>
-                        document.getElementById('dimensions-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                      }
-                    >
-                      View Dimensions
-                    </button>
-                  </div>
-                )}
               </div>
             )}
 
             {dimensionColumns.length > 0 && (
-              <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+              <div className="space-y-4 rounded-xl border border-amber-300 bg-card p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div>
-                      <h3 className="font-medium">Dimensions</h3>
-                      <p className="text-sm text-muted-foreground">Select a size to view exact measurements.</p>
-                    </div>
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4"
-                        checked={includeDimensions}
-                        onChange={(e) => setIncludeDimensions(e.target.checked)}
-                      />
-                      Send to order
-                    </label>
+                  <div>
+                    <h3 className="font-semibold text-espresso">Dimensions</h3>
+                    <p className="text-sm text-muted-foreground">Select a size to view exact measurements.</p>
                   </div>
-                  {wingbackSelected && (
-                    <span className="rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-800">
-                      Wingback adds {product.wingback_width_delta_cm || 4} cm width
-                    </span>
-                  )}
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={includeDimensions}
+                      onChange={(e) => setIncludeDimensions(e.target.checked)}
+                    />
+                    Send to order
+                  </label>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {dimensionColumns.map((size) => (
@@ -830,7 +808,7 @@ const ProductPage = () => {
                   ))}
                 </div>
                 {selectedDimension && (
-                  <div className="divide-y rounded-md border">
+                  <div className="divide-y rounded-md border border-amber-300 bg-card/60">
                     {adjustedDimensionTableRows.map((row) => (
                       <div
                         key={`${row.measurement}-${selectedDimension}`}
