@@ -21,12 +21,16 @@ const getVariantsKey = (item: {
   fabric?: string;
   dimension?: string;
   dimension_details?: string;
+  extras_total?: number;
+  include_dimension?: boolean;
 }) =>
   JSON.stringify({
     selectedVariants: item.selectedVariants || {},
     fabric: item.fabric || '',
     dimension: item.dimension || '',
     dimension_details: item.dimension_details || '',
+    extras_total: item.extras_total || 0,
+    include_dimension: item.include_dimension !== false,
   });
 
 const getVariantSummary = (item: {
@@ -34,6 +38,8 @@ const getVariantSummary = (item: {
   fabric?: string;
   dimension?: string;
   dimension_details?: string;
+  extras_total?: number;
+  include_dimension?: boolean;
 }) => {
   const parts = Object.entries(item.selectedVariants || {})
     .map(([group, value]) => `${group}: ${value}`);
@@ -130,12 +136,15 @@ const CheckoutPage = () => {
         items: state.items.map((item) => ({
           product_id: item.product.id,
           quantity: item.quantity,
-          price: item.product.price,
+          price: item.unit_price ?? item.product.price,
           size: item.size,
           color: item.color,
           style: getVariantSummary(item),
           dimension: item.dimension,
           dimension_details: item.dimension_details,
+          selected_variants: item.selectedVariants || {},
+          extras_total: item.extras_total || 0,
+          include_dimension: item.include_dimension !== false,
         })),
       };
 
@@ -147,7 +156,7 @@ const CheckoutPage = () => {
           const session = await apiPost<{ url: string; id: string }>('/payments/create_stripe_session/', {
             items: state.items.map((item) => ({
               name: item.product.name,
-              price: String(item.product.price),
+              price: String(item.unit_price ?? item.product.price),
               quantity: item.quantity,
             })),
             delivery_charges: String(deliveryFee),

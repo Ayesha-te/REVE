@@ -34,7 +34,7 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
           />
           
           {/* Badges */}
-          <div className="absolute left-3 top-3 flex flex-col gap-2">
+          <div className="absolute right-3 top-3 flex flex-col gap-2 items-end">
             {product.is_bestseller && (
               <Badge className="bg-primary text-primary-foreground">
                 Bestseller
@@ -46,7 +46,7 @@ const ProductCard = ({ product, index = 0 }: ProductCardProps) => {
               </Badge>
             )}
             {savings > 0 && (
-              <Badge variant="destructive">
+              <Badge className="bg-bronze text-card-foreground shadow">
                 Save {gbpFormatter.format(savings)}
               </Badge>
             )}

@@ -10,6 +10,9 @@ export interface CartItem {
   fabric?: string;
   dimension?: string;
   dimension_details?: string;
+  extras_total?: number;
+  include_dimension?: boolean;
+  unit_price?: number;
 }
 
 interface CartState {
@@ -27,13 +30,15 @@ type CartAction =
   | { type: 'CLOSE_CART' };
 
 const getVariantsKey = (
-  item: Pick<CartItem, 'selectedVariants' | 'fabric' | 'dimension' | 'dimension_details'>
+  item: Pick<CartItem, 'selectedVariants' | 'fabric' | 'dimension' | 'dimension_details' | 'extras_total' | 'include_dimension'>
 ): string => {
   return JSON.stringify({
     selectedVariants: item.selectedVariants || {},
     fabric: item.fabric || '',
     dimension: item.dimension || '',
     dimension_details: item.dimension_details || '',
+    extras_total: item.extras_total || 0,
+    include_dimension: item.include_dimension !== false,
   });
 };
 
@@ -132,7 +137,10 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const closeCart = () => dispatch({ type: 'CLOSE_CART' });
 
   const totalItems = state.items.reduce((sum, item) => sum + item.quantity, 0);
-  const totalPrice = state.items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const totalPrice = state.items.reduce((sum, item) => {
+    const unit = item.unit_price ?? item.product.price + (item.extras_total || 0);
+    return sum + unit * item.quantity;
+  }, 0);
 
   return (
     <CartContext.Provider

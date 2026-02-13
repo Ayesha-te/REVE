@@ -1,16 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ShoppingBag, Menu, X, ChevronDown, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useCart } from '@/context/CartContext';
 import logo from '@/assets/logo.png';
-import { apiGet } from '@/lib/api';
-import { Category } from '@/lib/types';
 
 const Header = () => {
-  const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
@@ -18,73 +14,31 @@ const Header = () => {
   const location = useLocation();
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  useEffect(() => {
     setIsMobileMenuOpen(false);
     setActiveDropdown(null);
   }, [location]);
 
-  const [navLinks, setNavLinks] = useState<
-    { name: string; href: string; children?: { name: string; href: string; description?: string }[] }[]
-  >([{ name: 'Home', href: '/' }]);
-
-  useEffect(() => {
-    const loadNav = async () => {
-      try {
-        const categories = await apiGet<Category[]>('/categories/');
-        const dynamicLinks = categories.map((cat) => ({
-          name: cat.name,
-          href: `/category/${cat.slug}`,
-          children: [
-            { name: `View All ${cat.name}`, href: `/category/${cat.slug}` },
-            ...(cat.subcategories || []).map((sub) => ({
-              name: sub.name,
-              href: `/category/${cat.slug}?sub=${sub.slug}`,
-              description: sub.description || undefined,
-            })),
-          ],
-        }));
-        setNavLinks([
-          { name: 'Home', href: '/' },
-          ...dynamicLinks,
-          { name: 'About Us', href: '/about' },
-          { name: 'Contact Us', href: '/contact' },
-        ]);
-      } catch {
-        setNavLinks([
-          { name: 'Home', href: '/' },
-          {
-            name: 'Beds',
-            href: '#',
-            children: [
-              { name: 'Divan Beds', href: '/divan-beds', description: 'Luxury divan beds with storage options' },
-              { name: 'Ottoman Beds', href: '/category/ottoman-beds', description: 'Elegant lift-up storage beds' },
-              { name: 'Upholstered Beds', href: '/category/upholstered-beds', description: 'Premium fabric bed frames' },
-            ],
-          },
-          { name: 'About Us', href: '/about' },
-          { name: 'Contact Us', href: '/contact' },
-        ]);
-      }
-    };
-    loadNav();
-  }, []);
+  const [navLinks] = useState<
+    { name: string; href: string; children?: { name: string; href: string }[] }[]
+  >([
+    { name: 'Home', href: '/' },
+    {
+      name: 'Beds',
+      href: '/category/beds',
+      children: [
+        { name: 'Divan Beds', href: '/category/divan-beds' },
+        { name: 'Upholstered Beds', href: '/category/upholstered-beds' },
+        { name: 'Wooden Beds', href: '/category/wooden-beds' },
+        { name: 'Kids Beds', href: '/category/kids-beds' },
+      ],
+    },
+    { name: 'About Us', href: '/about' },
+    { name: 'Contact Us', href: '/contact' },
+  ]);
 
   return (
     <>
-      <header
-        className={`fixed left-0 right-0 z-50 ${
-          isScrolled
-            ? 'top-0 border-b border-white/10 bg-background shadow-lg'
-            : 'top-[20px] bg-background'
-        }`}
-      >
+      <header className="fixed left-0 right-0 top-0 z-50 border-b border-border/30 bg-background shadow-sm">
         <div className="container mx-auto px-4">
           <div className="flex h-20 items-center justify-between">
             {/* Logo */}
@@ -123,34 +77,21 @@ const Header = () => {
                   )}
 
                   {/* Dropdown Menu */}
-                  <AnimatePresence>
-                    {link.children && activeDropdown === link.name && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute left-0 top-full w-72 rounded-lg bg-card p-4 shadow-luxury"
-                      >
-                        <div className="flex flex-col gap-2">
-                          {link.children.map((child) => (
-                            <Link
-                              key={child.name}
-                              to={child.href}
-                              className="group rounded-md p-3 transition-colors hover:bg-background"
-                            >
-                              <p className="font-medium text-foreground group-hover:text-primary">
-                                {child.name}
-                              </p>
-                              <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                                {child.description}
-                              </p>
-                            </Link>
-                          ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                  {link.children && activeDropdown === link.name && (
+                    <div className="absolute left-0 top-full w-56 rounded-lg bg-card p-3 shadow-luxury">
+                      <div className="flex flex-col">
+                        {link.children.map((child) => (
+                          <Link
+                            key={child.name}
+                            to={child.href}
+                            className="rounded-md px-3 py-2 text-left font-medium text-foreground transition-colors hover:bg-background hover:text-primary"
+                          >
+                            {child.name}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </nav>
@@ -158,22 +99,15 @@ const Header = () => {
             {/* Right Actions */}
             <div className="flex items-center gap-4">
               {/* Search */}
-              <AnimatePresence>
-                {isSearchOpen && (
-                  <motion.div
-                    initial={{ width: 0, opacity: 0 }}
-                    animate={{ width: 200, opacity: 1 }}
-                    exit={{ width: 0, opacity: 0 }}
-                    className="hidden overflow-hidden md:block"
-                  >
-                    <Input
-                      placeholder="Search..."
-                      className="border-accent bg-card"
-                      autoFocus
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              {isSearchOpen && (
+                <div className="hidden md:block">
+                  <Input
+                    placeholder="Search..."
+                    className="w-52 border-accent bg-card"
+                    autoFocus
+                  />
+                </div>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -221,80 +155,66 @@ const Header = () => {
         </div>
 
         {/* Mobile Menu */}
-        <AnimatePresence>
-          {isMobileMenuOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden border-t border-border bg-card lg:hidden"
-            >
-              <div className="container mx-auto px-4 py-6">
-                <div className="flex flex-col gap-4">
-                  {navLinks.map((link) => (
-                    <div key={link.name}>
-                      {link.children ? (
-                        <>
-                          <button
-                            onClick={() =>
-                              setActiveDropdown(
-                                activeDropdown === link.name ? null : link.name
-                              )
-                            }
-                            className="flex w-full items-center justify-between py-2 font-medium text-foreground"
-                          >
-                            {link.name}
-                            <ChevronDown
-                              className={`h-4 w-4 transition-transform ${
-                                activeDropdown === link.name ? 'rotate-180' : ''
-                              }`}
-                            />
-                          </button>
-                          <AnimatePresence>
-                            {activeDropdown === link.name && (
-                              <motion.div
-                                initial={{ height: 0 }}
-                                animate={{ height: 'auto' }}
-                                exit={{ height: 0 }}
-                                className="overflow-hidden pl-4"
-                              >
-                                {link.children.map((child) => (
-                                  <Link
-                                    key={child.name}
-                                    to={child.href}
-                                    className="block py-2 text-muted-foreground hover:text-primary"
-                                  >
-                                    {child.name}
-                                  </Link>
-                                ))}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </>
-                      ) : (
-                        <Link
-                          to={link.href}
-                          className="block py-2 font-medium text-foreground hover:text-primary"
+        {isMobileMenuOpen && (
+          <div className="border-t border-border bg-card lg:hidden">
+            <div className="container mx-auto px-4 py-6">
+              <div className="flex flex-col gap-4">
+                {navLinks.map((link) => (
+                  <div key={link.name}>
+                    {link.children ? (
+                      <>
+                        <button
+                          onClick={() =>
+                            setActiveDropdown(
+                              activeDropdown === link.name ? null : link.name
+                            )
+                          }
+                          className="flex w-full items-center justify-between py-2 font-medium text-foreground"
                         >
                           {link.name}
-                        </Link>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Mobile Search */}
-                <div className="mt-6">
-                  <Input placeholder="Search products..." className="border-accent" />
-                </div>
+                          <ChevronDown
+                            className={`h-4 w-4 transition-transform ${
+                              activeDropdown === link.name ? 'rotate-180' : ''
+                            }`}
+                          />
+                        </button>
+                        {activeDropdown === link.name && (
+                          <div className="pl-4">
+                            {link.children.map((child) => (
+                              <Link
+                                key={child.name}
+                                to={child.href}
+                                className="block py-2 text-muted-foreground hover:text-primary"
+                              >
+                                {child.name}
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <Link
+                        to={link.href}
+                        className="block py-2 font-medium text-foreground hover:text-primary"
+                      >
+                        {link.name}
+                      </Link>
+                    )}
+                  </div>
+                ))}
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+
+              {/* Mobile Search */}
+              <div className="mt-6">
+                <Input placeholder="Search products..." className="border-accent" />
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Spacer for fixed header + announcement bar */}
-      <div className={`h-[${isScrolled ? '80px' : '80px'}]`} style={{ height: isScrolled ? '80px' : '80px' }} />
+      <div className="h-20" />
     </>
   );
 };
