@@ -437,8 +437,12 @@ const ProductPage = () => {
   const dimensionsRows = (product?.features || []).filter((feature) =>
     /(dimension|height|width|length|depth|cm|mm|inch|ft)/i.test(feature)
   );
-  const rawDimensionTableRows = (product?.computed_dimensions || product?.dimensions || []).filter(
-    (row) => row?.measurement && row?.values && Object.keys(row.values).length > 0
+  const rawDimensionTableRows = useMemo(
+    () =>
+      (product?.computed_dimensions || product?.dimensions || []).filter(
+        (row) => row?.measurement && row?.values && Object.keys(row.values).length > 0
+      ),
+    [product?.computed_dimensions, product?.dimensions]
   );
   const adjustedDimensionTableRows = useMemo(
     () =>
@@ -462,6 +466,7 @@ const ProductPage = () => {
     const remainder = dynamicOrder.filter((s) => !preferredOrder.includes(s));
     return [...preferredOrder, ...remainder];
   }, [adjustedDimensionTableRows]);
+  const dimensionColumnKey = useMemo(() => dimensionColumns.join('|'), [dimensionColumns]);
   const selectedDimensionDetails = useMemo(() => {
     if (!selectedDimension) return '';
     const details = adjustedDimensionTableRows
@@ -485,7 +490,7 @@ const ProductPage = () => {
     if (selectedSize && dimensionColumns.includes(selectedSize)) {
       setSelectedDimension(selectedSize);
     }
-  }, [selectedSize, dimensionColumns]);
+  }, [selectedSize, dimensionColumnKey]);
   const returnsInfoAnswer =
     (product?.returns_guarantee || '').trim() ||
     '10-year structural guarantee, 30-day comfort exchange on mattresses, and free returns within 14 days.';
