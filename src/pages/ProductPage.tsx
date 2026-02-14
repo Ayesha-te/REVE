@@ -159,7 +159,12 @@ const normalizeStyleOptions = (options: unknown): NormalizedStyleOption[] => {
         const price_delta = typeof rawDelta === 'number' ? rawDelta : Number(rawDelta || 0);
         const rawSize = (option as { size?: unknown }).size;
         const size = typeof rawSize === 'string' ? rawSize.trim() : '';
-        return { label, description, icon_url, price_delta, size };
+        const sizes = Array.isArray((option as { sizes?: unknown }).sizes)
+          ? ((option as { sizes?: unknown }).sizes as unknown[])
+              .map((s) => (typeof s === 'string' ? s.trim() : ''))
+              .filter(Boolean)
+          : [];
+        return { label, description, icon_url, price_delta, size, sizes };
       }
       return null;
     })
