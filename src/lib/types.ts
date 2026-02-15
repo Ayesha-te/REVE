@@ -41,6 +41,7 @@ export interface ProductColor {
   id: number;
   name: string;
   hex_code?: string;
+  image_url?: string;
   image?: string;
 }
 
@@ -48,6 +49,7 @@ export interface ProductSize {
   id: number;
   name: string;
   description?: string;
+  price_delta?: number;
 }
 
 export interface ProductStyle {
@@ -74,6 +76,15 @@ export interface ProductFabric {
   image_url: string;
   is_shared?: boolean;
   colors?: ProductColor[];
+}
+
+export interface ProductMattress {
+  id: number;
+  name?: string;
+  description?: string;
+  image_url?: string;
+  price?: number | string | null;
+  source_product?: number | null;
 }
 
 export interface FilterOption {
@@ -142,6 +153,7 @@ export interface Product {
   sizes: ProductSize[];
   styles: ProductStyle[];
   fabrics: ProductFabric[];
+  mattresses?: ProductMattress[];
   filters?: FilterType[];
   computed_dimensions?: ProductDimensionRow[];
   dimension_template?: number | null;

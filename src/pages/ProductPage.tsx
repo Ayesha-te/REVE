@@ -47,7 +47,7 @@ import Footer from '@/components/Footer';
 import ProductCard from '@/components/ProductCard';
 
 import { apiGet, apiPost } from '@/lib/api';
-import { Category, Product, ProductDimensionRow, Review } from '@/lib/types';
+import { Category, Product, ProductDimensionRow, Review, ProductMattress } from '@/lib/types';
 import { useCart } from '@/context/CartContext';
 
 import { toast } from 'sonner';
@@ -204,7 +204,7 @@ const adjustDimensionsForWingback = (
 
 
 
-const parseSizeOption = (rawSize: string, index: number, rawDescription = ''): ParsedSizeOption => {
+const parseSizeOption = (rawSize: string, index: number, rawDescription = '', explicitDelta?: number): ParsedSizeOption => {
 
   const raw = (rawSize || '').trim();
 
@@ -244,7 +244,7 @@ const parseSizeOption = (rawSize: string, index: number, rawDescription = ''): P
 
 
 
-  const plusMatch = raw.match(/^(.*?)\s*(?:\(\s*)?\+\s*£?\s*(\d+(\.\d+)?)\s*(?:\)\s*)?$/i);
+  const plusMatch = raw.match(/^(.*?)\s*(?:\(\s*)?\+\s*(?:£)?\s*(\d+(?:\.\d+)?)\s*(?:\)\s*)?$/i);
 
   if (plusMatch) {
 
@@ -266,9 +266,13 @@ const parseSizeOption = (rawSize: string, index: number, rawDescription = ''): P
 
 
 
-  return { id: `size-${index}`, label: raw, delta: 0, description, raw: rawSize };
+  const fallbackDelta = Number.isFinite(explicitDelta) ? Number(explicitDelta) : 0;
+
+  return { id: `size-${index}`, label: raw, delta: fallbackDelta, description, raw: rawSize };
 
 };
+
+const formatOptionLabel = (label: string) => label.replace(/(\\d)([A-Za-z])/g, '$1 $2').trim();
 
 
 
@@ -418,6 +422,7 @@ const ProductPage = () => {
 
   const [selectedColor, setSelectedColor] = useState('');
   const [selectedStyles, setSelectedStyles] = useState<Record<string, string>>({});
+  const [selectedMattressId, setSelectedMattressId] = useState<number | null>(null);
   const [selectedFabric, setSelectedFabric] = useState('');
   const [enabledGroups, setEnabledGroups] = useState<Record<string, boolean>>({});
   const [activeVariantGroupKey, setActiveVariantGroupKey] = useState('');
@@ -476,6 +481,7 @@ const ProductPage = () => {
         const fetched = normalizedProducts[0] || null;
 
         setProduct(fetched);
+        setSelectedMattressId(null);
         if (fetched?.id) {
           fetchReviews(fetched.id);
         }
@@ -595,7 +601,9 @@ const ProductPage = () => {
 
   }, [fabricColors, availableColors, selectedColor]);
 
-  const sizeOptions = productSizes.map((size, index) => parseSizeOption(size.name, index, size.description || ''));
+  const sizeOptions = productSizes.map((size, index) =>
+    parseSizeOption(size.name, index, size.description || '', Number(size.price_delta ?? 0))
+  );
 
 
 
@@ -806,28 +814,21 @@ const ProductPage = () => {
 
 
   const stylePriceDelta = styleVariantGroups.reduce((sum, group) => {
-
     const selected = getSelectedOptionForGroup(group);
-
     if (!enabledGroups[group.name]) return sum;
-
     const delta = Number(selected?.price_delta ?? 0);
-
     return sum + (Number.isFinite(delta) ? delta : 0);
-
   }, 0);
 
-
+  const mattresses: ProductMattress[] = Array.isArray(product?.mattresses) ? (product?.mattresses as ProductMattress[]) : [];
+  const selectedMattress = mattresses.find((m) => m.id === selectedMattressId) || null;
+  const mattressPrice =
+    selectedMattress?.price !== undefined && selectedMattress?.price !== null ? Number(selectedMattress.price) : 0;
 
   const wingbackSelected = styleVariantGroups.some((group) => {
-
     const selected = getSelectedOptionForGroup(group);
-
     return /wingback/i.test(`${selected?.label || ''} ${selected?.description || ''}`);
-
   });
-
-
 
   const basePrice = Number(product?.price ?? 0);
 
@@ -839,11 +840,11 @@ const ProductPage = () => {
 
       : undefined;
 
-  const unitPrice = basePrice + sizeDelta + stylePriceDelta;
+  const unitPrice = basePrice + sizeDelta + stylePriceDelta + mattressPrice;
 
   const unitOriginalPrice =
 
-    baseOriginalPrice !== undefined ? baseOriginalPrice + sizeDelta + stylePriceDelta : undefined;
+    baseOriginalPrice !== undefined ? baseOriginalPrice + sizeDelta + stylePriceDelta + mattressPrice : undefined;
 
   const totalPrice = unitPrice * quantity;
 
@@ -1065,41 +1066,28 @@ const ProductPage = () => {
 
 
   const handleAddToCart = () => {
-
-    const extrasTotal = stylePriceDelta;
-
+    const extrasTotal = stylePriceDelta + mattressPrice;
+    const variantMap = enabledGroups
+      ? Object.fromEntries(Object.entries(selectedStyles).filter(([name]) => enabledGroups[name]))
+      : { ...selectedStyles };
+    if (mattresses.length > 0) {
+      variantMap['Mattress'] = selectedMattress ? selectedMattress.name || 'Mattress' : 'No mattress';
+    }
     addItem({
-
       product: product as Product,
-
       quantity,
-
       size: activeSizeOption?.label || selectedSize,
-
       color: selectedColor,
-
-      selectedVariants: enabledGroups
-
-        ? Object.fromEntries(
-
-            Object.entries(selectedStyles).filter(([name]) => enabledGroups[name])
-
-          )
-
-        : selectedStyles,
-
+      selectedVariants: variantMap,
+      mattress_id: selectedMattress?.id || null,
+      mattress_name: selectedMattress?.name || null,
+      mattress_price: selectedMattress ? mattressPrice : null,
       fabric: selectedFabric || undefined,
-
       dimension: includeDimensions ? selectedDimension || undefined : undefined,
-
       dimension_details: includeDimensions ? selectedDimensionDetails || undefined : undefined,
-
       include_dimension: includeDimensions,
-
       extras_total: extrasTotal,
-
       unit_price: unitPrice,
-
     });
 
     toast.success(`${product.name} added to cart`);
@@ -1185,7 +1173,7 @@ const ProductPage = () => {
 
         <div className="grid gap-12 lg:grid-cols-2">
 
-          <div className="space-y-4">
+          <div className="space-y-4 lg:sticky lg:top-24 self-start">
 
             <motion.div
 
@@ -1236,9 +1224,7 @@ const ProductPage = () => {
                 )}
 
                 {savingsPerUnit > 0 && (
-
-                  <Badge className="bg-white text-card-foreground shadow-md">Save {formatPrice(savingsPerUnit)}</Badge>
-
+                  <Badge className="bg-bronze text-white shadow-md">Save {formatPrice(savingsPerUnit)}</Badge>
                 )}
 
               </div>
@@ -1293,7 +1279,7 @@ const ProductPage = () => {
 
 
 
-          <div className="space-y-6">
+          <div className="space-y-6 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-2">
 
             <div className="space-y-3">
 
@@ -1345,7 +1331,7 @@ const ProductPage = () => {
 
 
 
-            <div className="rounded-xl border border-border bg-card p-4">
+            <div className="rounded-xl border border-border bg-white p-4">
 
               <div className="flex flex-wrap items-center gap-3">
 
@@ -1358,13 +1344,9 @@ const ProductPage = () => {
                 )}
 
                 {savingsPerUnit > 0 && (
-
-                  <Badge className="bg-bronze text-card-foreground text-sm">
-
+                  <Badge className="bg-bronze text-white text-sm">
                     Save {formatPrice(savingsPerUnit)}
-
                   </Badge>
-
                 )}
 
               </div>
@@ -1373,22 +1355,70 @@ const ProductPage = () => {
 
             </div>
 
+            {mattresses.length > 0 && (
+              <div className="rounded-xl border border-border bg-white p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-base font-semibold">Choose a mattress</p>
+                  <span className="text-xs text-muted-foreground">Optional</span>
+                </div>
+                <div className="flex flex-col gap-3">
+                  {mattresses.map((mattress) => (
+                    <button
+                      key={mattress.id}
+                      type="button"
+                      onClick={() => setSelectedMattressId(mattress.id)}
+                      className={`flex items-start gap-3 rounded-lg border p-3 text-left transition ${
+                        selectedMattressId === mattress.id
+                          ? 'border-primary ring-1 ring-primary/40 bg-primary/5'
+                          : 'border-border hover:border-primary/60'
+                      }`}
+                    >
+                      {mattress.image_url ? (
+                        <img
+                          src={mattress.image_url}
+                          alt={mattress.name || 'Mattress option'}
+                          className="h-16 w-20 rounded-md object-cover"
+                        />
+                      ) : (
+                        <div className="h-16 w-20 rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                          No image
+                        </div>
+                      )}
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-semibold text-foreground">{mattress.name || 'Mattress'}</p>
+                          {mattress.price !== undefined && mattress.price !== null && (
+                            <span className="text-sm font-semibold text-primary">{formatPrice(Number(mattress.price))}</span>
+                          )}
+                        </div>
+                        {mattress.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-2">{mattress.description}</p>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMattressId(null)}
+                    className={`flex items-center justify-between rounded-lg border p-3 text-left transition ${
+                      selectedMattressId === null ? 'border-primary ring-1 ring-primary/40 bg-primary/5' : 'border-border hover:border-primary/60'
+                    }`}
+                  >
+                    <div>
+                      <p className="font-semibold text-foreground">No mattress</p>
+                      <p className="text-xs text-muted-foreground">Keep frame only.</p>
+                    </div>
+                    <span className="text-sm font-semibold text-primary">Included</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
 
             {variantGroups.length > 0 && (
               <div className="space-y-6 rounded-xl border border-border bg-white p-4">
                 <div className="flex items-center justify-between">
                   <p className="text-base font-semibold">Options</p>
-                  {dimensionColumns.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setIsDimensionsOpen(true)}
-                      className="flex items-center gap-2 text-sm font-semibold text-primary underline underline-offset-4"
-                    >
-                      <Ruler className="h-4 w-4" />
-                      Dimensions
-                    </button>
-                  )}
                 </div>
                 {variantGroups.map((group) => {
                   const selected = getSelectedOptionForGroup(group);
@@ -1402,20 +1432,20 @@ const ProductPage = () => {
                           <div>
                             <p className="text-base font-semibold capitalize">{group.name}</p>
                             <p className="text-xs text-muted-foreground">
-                              {selected?.label ? `Selected: ${selected.label}` : 'Select an option'}
+                              {selected?.label
+                                ? `Selected: ${selected.label.replace(/(\d+)(Drawers)/i, '$1 $2')}${
+                                    selected.description ? ` (${selected.description})` : ''
+                                  }`
+                                : 'Select an option'}
                             </p>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-3">
+                      <div className="flex flex-wrap gap-2">
                         {group.options.map((option) => {
                           const isSelected = selected?.key === option.key;
                           const disabled = false;
-                          const sizeStyle =
-                            group.kind === 'size'
-                              ? 'h-24 w-32'
-                              : 'h-24 w-32';
                           return (
                             <button
                               key={option.key}
@@ -1444,42 +1474,73 @@ const ProductPage = () => {
                                 setSelectedStyles((prev) => ({ ...prev, [styleName]: option.label }));
                                 setEnabledGroups((prev) => ({ ...prev, [group.name]: true }));
                               }}
-                              className={`relative flex ${sizeStyle} flex-col items-center justify-center rounded-lg border bg-card transition-all ${
-                                disabled
-                                  ? 'cursor-not-allowed opacity-40'
-                                  : isSelected
-                                  ? 'border-primary bg-primary/8 ring-1 ring-primary/30'
-                                  : 'border-border hover:border-primary/60'
-                              }`}
+                              className={
+                                group.kind === 'color'
+                                  ? `relative h-12 w-12 shrink-0 rounded-md border transition ${
+                                      disabled
+                                        ? 'cursor-not-allowed opacity-40'
+                                        : isSelected
+                                        ? 'border-primary ring-2 ring-primary/40'
+                                        : 'border-border hover:border-primary/60'
+                                    }`
+                                  : `relative flex h-28 w-28 shrink-0 flex-col items-center justify-center rounded-lg border bg-white transition-all ${
+                                      disabled
+                                        ? 'cursor-not-allowed opacity-40'
+                                        : isSelected
+                                        ? 'border-primary bg-primary/8 ring-1 ring-primary/30'
+                                        : 'border-border hover:border-primary/60'
+                                    }`
+                              }
                             >
-                              <div className="flex flex-col items-center gap-2 px-3 text-center">
-                                {group.kind === 'color' ? (
+                              {group.kind === 'color' ? (
+                                <>
                                   <span
-                                    className="h-10 w-10 rounded-md border border-border"
-                                    style={{ backgroundColor: option.color_code || '#888' }}
+                                    className="absolute inset-0 rounded-md"
+                                    style={{
+                                      backgroundColor: option.color_code || '#888',
+                                      backgroundImage: option.icon_url ? `url(${option.icon_url})` : undefined,
+                                      backgroundSize: 'cover',
+                                      backgroundPosition: 'center',
+                                    }}
                                   />
-                                ) : (
+                                  {isSelected && <CheckCircle2 className="absolute right-1 top-1 h-4 w-4 text-primary drop-shadow" />}
+                                  <span className="sr-only">{formatOptionLabel(option.label)}</span>
+                                </>
+                              ) : (
+                                <div className="flex flex-col items-center gap-1.5 px-2 text-center">
                                   <IconVisual
                                     icon={option.icon_url || group.icon_url}
                                     alt={option.label}
-                                    className="h-8 w-8 object-contain"
+                                    className="h-10 w-10 object-contain"
                                   />
-                                )}
-                                <p className="text-sm font-medium text-espresso leading-tight break-words">{option.label}</p>
-                                <p className="text-[11px] text-muted-foreground">
-                                  {Number(option.price_delta || 0) > 0
-                                    ? `+${formatPrice(Number(option.price_delta || 0))}`
-                                    : 'Included'}
-                                </p>
-                                {option.description && (
-                                  <p className="text-[11px] text-muted-foreground leading-tight">{option.description}</p>
-                                )}
-                              </div>
-                              {isSelected && <CheckCircle2 className="absolute right-2 top-2 h-4 w-4 text-primary" />}
+                                  <p className="text-[11px] font-semibold text-espresso leading-tight text-center break-words line-clamp-3">
+                                    {formatOptionLabel(option.label)}
+                                    {option.description && ` (${option.description})`}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground leading-tight text-center">
+                                    {Number(option.price_delta || 0) > 0
+                                      ? `+${formatPrice(Number(option.price_delta || 0))}`
+                                      : 'Included'}
+                                  </p>
+                                </div>
+                              )}
+                              {group.kind !== 'color' && isSelected && <CheckCircle2 className="absolute right-2 top-2 h-4 w-4 text-primary" />}
                             </button>
                           );
                         })}
                       </div>
+                      {dimensionColumns.length > 0 && group.kind === 'size' && (
+                        <div className="pt-3">
+                          <button
+                            type="button"
+                            onClick={() => setIsDimensionsOpen(true)}
+                            className="flex items-center gap-2 text-sm font-semibold text-primary underline underline-offset-4"
+                          >
+                            <Ruler className="h-4 w-4" />
+                            Dimensions
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1544,53 +1605,35 @@ const ProductPage = () => {
                 </div>
 
                 {availableColors.length > 0 && (
-
                   <div className="mt-4 space-y-2">
-
                     <p className="text-sm font-medium">Colours</p>
-
                     <div className="flex flex-wrap gap-2">
-
-                      {availableColors.map((color, idx) => (
-
-                        <button
-
-                          key={color.id ?? `${color.name}-${idx}`}
-
-                          type="button"
-
-                          onClick={() => setSelectedColor(color.name)}
-
-                          className={`flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition ${
-
-                            selectedColor === color.name
-
-                              ? 'border-primary bg-primary text-primary-foreground'
-
-                              : 'border-border bg-background hover:border-primary/50'
-
-                          }`}
-
-                        >
-
-                          <span
-
-                            className="h-4 w-4 rounded-full border"
-
-                            style={{ backgroundColor: color.hex_code || '#888' }}
-
-                          />
-
-                          {color.name}
-
-                        </button>
-
-                      ))}
-
+                      {availableColors.map((color, idx) => {
+                        const isActive = selectedColor === color.name;
+                        const swatchStyle: React.CSSProperties = color.image_url
+                          ? {
+                              backgroundImage: `url(${color.image_url})`,
+                              backgroundSize: 'cover',
+                              backgroundPosition: 'center',
+                            }
+                          : { backgroundColor: color.hex_code || '#888' };
+                        return (
+                          <button
+                            key={color.id ?? `${color.name}-${idx}`}
+                            type="button"
+                            onClick={() => setSelectedColor(color.name)}
+                            className={`relative h-12 w-12 overflow-hidden rounded-md border transition ${
+                              isActive ? 'border-primary ring-2 ring-primary/50' : 'border-border hover:border-primary/60'
+                            }`}
+                            style={swatchStyle}
+                            aria-label={color.name}
+                          >
+                            {isActive && <CheckCircle2 className="absolute right-1 top-1 h-4 w-4 text-primary drop-shadow" />}
+                          </button>
+                        );
+                      })}
                     </div>
-
                   </div>
-
                 )}
 
               </div>
@@ -1938,8 +1981,8 @@ const ProductPage = () => {
                         onClick={() => setSelectedDimension(size)}
                         className={`rounded-md border px-3 py-2 text-sm transition ${
                           selectedDimension === size
-                            ? 'border-primary bg-primary text-primary-foreground'
-                            : 'border-border bg-background hover:border-primary/60'
+                            ? 'border-primary bg-primary text-white shadow-sm'
+                            : 'border-border bg-white text-espresso hover:border-primary/60'
                         }`}
                       >
                         {size}
@@ -1989,11 +2032,3 @@ const ProductPage = () => {
 
 
 export default ProductPage;
-
-
-
-
-
-
-
-
