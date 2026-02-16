@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 
 import { useParams, Link } from 'react-router-dom';
 
@@ -94,7 +95,7 @@ type VariantGroup = {
 
   icon_url?: string;
 
-  kind: 'color' | 'size' | 'style';
+  kind: 'color' | 'size' | 'style' | 'fabric';
 
   styleName?: string;
 
@@ -511,21 +512,14 @@ const ProductPage = () => {
       }
 
         if (fetched?.fabrics?.length && fetched.fabrics[0]?.colors?.length) {
-
+          const firstWithImage = fetched.fabrics[0].colors.find((c) => c.image_url) || fetched.fabrics[0].colors[0];
           setSelectedFabric(fetched.fabrics[0].name);
-
-          setSelectedColor(fetched.fabrics[0].colors[0].name);
-
+          setSelectedColor(firstWithImage?.name || '');
         } else if (fetched?.colors?.length) {
-
           setSelectedColor(fetched.colors[0].name);
-
           setSelectedFabric('');
-
         } else {
-
           setSelectedFabric('');
-
         }
 
         const initialStyles: Record<string, string> = {};
@@ -550,6 +544,14 @@ const ProductPage = () => {
           setSelectedFabric(fetched.fabrics[0].name);
         } else {
           setSelectedFabric('');
+        }
+        if (Array.isArray(fetched?.mattresses) && fetched.mattresses.length > 0) {
+          const freeMattress = fetched.mattresses.find(
+            (m) => Number(m.price ?? 0) === 0 || m.price === null
+          );
+          setSelectedMattressId(freeMattress?.id ?? fetched.mattresses[0].id ?? null);
+        } else {
+          setSelectedMattressId(null);
         }
         setIsLoading(false);
 
@@ -577,29 +579,28 @@ const ProductPage = () => {
 
   const fabricColors = selectedFabricObj?.colors || [];
 
-  const availableColors = (fabricColors.length > 0 ? fabricColors : product?.colors) || [];
+  const availableColors =
+    product?.fabrics?.length && selectedFabric
+      ? fabricColors
+      : product?.fabrics?.length
+      ? []
+      : product?.colors || [];
+
+  const displayColors = (availableColors || []).filter((c) => c.image_url);
 
   useEffect(() => {
 
-    if (fabricColors.length > 0) {
-
-      if (!fabricColors.some((c) => c.name === selectedColor)) {
-
-        setSelectedColor(fabricColors[0].name);
-
+    if (displayColors.length > 0) {
+      if (!displayColors.some((c) => c.name === selectedColor)) {
+        setSelectedColor(displayColors[0].name);
       }
-
     } else if (availableColors.length > 0) {
-
       if (!availableColors.some((c) => c.name === selectedColor)) {
-
         setSelectedColor(availableColors[0].name);
-
       }
-
     }
 
-  }, [fabricColors, availableColors, selectedColor]);
+  }, [fabricColors, availableColors, displayColors, selectedColor]);
 
   const sizeOptions = productSizes.map((size, index) =>
     parseSizeOption(size.name, index, size.description || '', Number(size.price_delta ?? 0))
@@ -679,7 +680,23 @@ const ProductPage = () => {
 
     const groups: VariantGroup[] = [];
 
-    if (availableColors.length > 0) {
+    const fabrics = product?.fabrics || [];
+
+    if (fabrics.length > 0) {
+      groups.push({
+        key: 'fabric',
+        name: 'Fabric',
+        kind: 'fabric',
+        options: fabrics.map((fabric) => ({
+          key: `fabric-${fabric.id ?? fabric.name}`,
+          label: fabric.name,
+          description: '',
+          price_delta: 0,
+        })),
+      });
+    }
+
+    if (displayColors.length > 0) {
 
       groups.push({
 
@@ -689,13 +706,14 @@ const ProductPage = () => {
 
         kind: 'color',
 
-        options: availableColors.map((color) => ({
+        options: displayColors.map((color) => ({
 
           key: `color-${color.id}`,
 
           label: color.name,
 
           color_code: color.hex_code,
+          icon_url: color.image_url,
 
           price_delta: 0,
 
@@ -735,7 +753,7 @@ const ProductPage = () => {
 
     return groups;
 
-  }, [availableColors, sizeOptions, styleVariantGroups]);
+  }, [availableColors, sizeOptions, styleVariantGroups, product?.fabrics]);
 
 
 
@@ -795,6 +813,10 @@ const ProductPage = () => {
 
       return group.options.find((option) => option.label === selectedColor) || group.options[0];
 
+    }
+
+    if (group.kind === 'fabric') {
+      return group.options.find((option) => option.label === selectedFabric) || group.options[0];
     }
 
     if (group.kind === 'size') {
@@ -1359,7 +1381,7 @@ const ProductPage = () => {
               <div className="rounded-xl border border-border bg-white p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-base font-semibold">Choose a mattress</p>
-                  <span className="text-xs text-muted-foreground">Optional</span>
+                  <span className="text-xs text-muted-foreground">Choose the best comfort</span>
                 </div>
                 <div className="flex flex-col gap-3">
                   {mattresses.map((mattress) => (
@@ -1387,8 +1409,16 @@ const ProductPage = () => {
                       <div className="flex-1 space-y-1">
                         <div className="flex items-center justify-between gap-2">
                           <p className="font-semibold text-foreground">{mattress.name || 'Mattress'}</p>
-                          {mattress.price !== undefined && mattress.price !== null && (
-                            <span className="text-sm font-semibold text-primary">{formatPrice(Number(mattress.price))}</span>
+                          {mattress.price !== undefined && mattress.price !== null ? (
+                            Number(mattress.price) > 0 ? (
+                              <span className="text-sm font-semibold text-primary">
+                                {formatPrice(Number(mattress.price))}
+                              </span>
+                            ) : (
+                              <span className="text-xs font-semibold text-green-700">Included</span>
+                            )
+                          ) : (
+                            <span className="text-xs font-semibold text-green-700">Included</span>
                           )}
                         </div>
                         {mattress.description && (
@@ -1397,21 +1427,21 @@ const ProductPage = () => {
                       </div>
                     </button>
                   ))}
-                  <button
-                    type="button"
-                    onClick={() => setSelectedMattressId(null)}
-                    className={`flex items-center justify-between rounded-lg border p-3 text-left transition ${
-                      selectedMattressId === null ? 'border-primary ring-1 ring-primary/40 bg-primary/5' : 'border-border hover:border-primary/60'
-                    }`}
-                  >
-                    <div>
-                      <p className="font-semibold text-foreground">No mattress</p>
-                      <p className="text-xs text-muted-foreground">Keep frame only.</p>
-                    </div>
-                    <span className="text-sm font-semibold text-primary">Included</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMattressId(null)}
+                  className={`flex items-center justify-between rounded-lg border p-3 text-left transition ${
+                    selectedMattressId === null ? 'border-primary ring-1 ring-primary/40 bg-primary/5' : 'border-border hover:border-primary/60'
+                  }`}
+                >
+                  <div>
+                    <p className="font-semibold text-foreground">No mattress</p>
+                    <p className="text-xs text-muted-foreground">Keep frame only.</p>
+                  </div>
+                  <span className="text-sm font-semibold text-primary">Included</span>
+                </button>
               </div>
+            </div>
             )}
 
 
@@ -1452,6 +1482,16 @@ const ProductPage = () => {
                               type="button"
                               disabled={disabled}
                               onClick={() => {
+                                if (group.kind === 'fabric') {
+                                  setSelectedFabric(option.label);
+                                  const firstColor = (product?.fabrics || []).find((f) => f.name === option.label)?.colors?.[0];
+                                  if (firstColor?.name) {
+                                    setSelectedColor(firstColor.name);
+                                  } else {
+                                    setSelectedColor('');
+                                  }
+                                  return;
+                                }
                                 if (group.kind === 'color') {
                                   setSelectedColor(option.label);
                                   return;
@@ -1483,6 +1523,14 @@ const ProductPage = () => {
                                         ? 'border-primary ring-2 ring-primary/40'
                                         : 'border-border hover:border-primary/60'
                                     }`
+                                  : group.kind === 'fabric'
+                                  ? `rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                                      disabled
+                                        ? 'cursor-not-allowed opacity-40'
+                                        : isSelected
+                                        ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/30'
+                                        : 'border-border hover:border-primary/60'
+                                    }`
                                   : `relative flex h-28 w-28 shrink-0 flex-col items-center justify-center rounded-lg border bg-white transition-all ${
                                       disabled
                                         ? 'cursor-not-allowed opacity-40'
@@ -1497,7 +1545,7 @@ const ProductPage = () => {
                                   <span
                                     className="absolute inset-0 rounded-md"
                                     style={{
-                                      backgroundColor: option.color_code || '#888',
+                                      backgroundColor: option.color_code || '#f3f4f6',
                                       backgroundImage: option.icon_url ? `url(${option.icon_url})` : undefined,
                                       backgroundSize: 'cover',
                                       backgroundPosition: 'center',
@@ -1506,6 +1554,8 @@ const ProductPage = () => {
                                   {isSelected && <CheckCircle2 className="absolute right-1 top-1 h-4 w-4 text-primary drop-shadow" />}
                                   <span className="sr-only">{formatOptionLabel(option.label)}</span>
                                 </>
+                              ) : group.kind === 'fabric' ? (
+                                <span>{formatOptionLabel(option.label)}</span>
                               ) : (
                                 <div className="flex flex-col items-center gap-1.5 px-2 text-center">
                                   <IconVisual
@@ -1524,7 +1574,9 @@ const ProductPage = () => {
                                   </p>
                                 </div>
                               )}
-                              {group.kind !== 'color' && isSelected && <CheckCircle2 className="absolute right-2 top-2 h-4 w-4 text-primary" />}
+                              {group.kind !== 'color' && group.kind !== 'fabric' && isSelected && (
+                                <CheckCircle2 className="absolute right-2 top-2 h-4 w-4 text-primary" />
+                              )}
                             </button>
                           );
                         })}
@@ -1548,103 +1600,7 @@ const ProductPage = () => {
             )}
 
 
-            {product.fabrics && product.fabrics.length > 0 && (
-
-              <div>
-
-                <h3 className="mb-3 font-medium">Fabric</h3>
-
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-
-          {product.fabrics.map((fabric) => (
-
-            <button
-
-              key={fabric.id}
-
-              onClick={() => {
-
-                setSelectedFabric(fabric.name);
-
-                if ((fabric.colors || []).length > 0) {
-
-                  setSelectedColor(fabric.colors[0].name);
-
-                }
-
-              }}
-
-              className={`rounded-xl border p-2 text-left transition-all ${
-
-                selectedFabric === fabric.name
-
-                  ? 'border-primary ring-2 ring-primary/20'
-
-                  : 'border-border hover:border-primary/60'
-
-                      }`}
-
-                    >
-
-                      <img
-
-                        src={fabric.image_url}
-
-                        alt={fabric.name}
-
-                        className="mb-2 h-24 w-full rounded-md object-cover"
-
-                      />
-
-                      <span className="line-clamp-2 text-xs font-medium">{fabric.name}</span>
-
-                    </button>
-
-                  ))}
-
-                </div>
-
-                {availableColors.length > 0 && (
-                  <div className="mt-4 space-y-2">
-                    <p className="text-sm font-medium">Colours</p>
-                    <div className="flex flex-wrap gap-2">
-                      {availableColors.map((color, idx) => {
-                        const isActive = selectedColor === color.name;
-                        const swatchStyle: React.CSSProperties = color.image_url
-                          ? {
-                              backgroundImage: `url(${color.image_url})`,
-                              backgroundSize: 'cover',
-                              backgroundPosition: 'center',
-                            }
-                          : { backgroundColor: color.hex_code || '#888' };
-                        return (
-                          <button
-                            key={color.id ?? `${color.name}-${idx}`}
-                            type="button"
-                            onClick={() => setSelectedColor(color.name)}
-                            className={`relative h-12 w-12 overflow-hidden rounded-md border transition ${
-                              isActive ? 'border-primary ring-2 ring-primary/50' : 'border-border hover:border-primary/60'
-                            }`}
-                            style={swatchStyle}
-                            aria-label={color.name}
-                          >
-                            {isActive && <CheckCircle2 className="absolute right-1 top-1 h-4 w-4 text-primary drop-shadow" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-              </div>
-
-            )}
-
-
-
-
-
-            <div className="flex flex-col gap-4 sm:flex-row">
+                        <div className="flex flex-col gap-4 sm:flex-row">
 
               <div className="flex items-center rounded-md border border-border">
 
