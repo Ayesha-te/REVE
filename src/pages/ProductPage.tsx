@@ -1456,6 +1456,7 @@ const ProductPage = () => {
                 {variantGroups.map((group) => {
                   const selected = getSelectedOptionForGroup(group);
                   const isStyleGroup = group.kind === 'style';
+                  const isHeadboardGroup = isStyleGroup && group.name.toLowerCase().includes('headboard');
                   const groupEnabled = enabledGroups[group.name] !== false;
                   return (
                     <div key={group.key} className="space-y-3 border-b border-border/60 pb-4 last:border-0 last:pb-0">
@@ -1534,7 +1535,11 @@ const ProductPage = () => {
                                         ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/30'
                                         : 'border-border hover:border-primary/60'
                                     }`
-                                  : `relative flex h-28 w-28 shrink-0 flex-col items-center justify-center rounded-lg border bg-white transition-all ${
+                                  : `relative flex ${
+                                      isHeadboardGroup
+                                        ? 'h-32 w-44 flex-row items-center justify-start gap-4 px-3 text-left'
+                                        : 'h-28 w-28 flex-col items-center justify-center px-2 text-center'
+                                    } shrink-0 rounded-lg border bg-white transition-all ${
                                       disabled
                                         ? 'cursor-not-allowed opacity-40'
                                         : isSelected
@@ -1560,21 +1565,35 @@ const ProductPage = () => {
                               ) : group.kind === 'fabric' ? (
                                 <span>{formatOptionLabel(option.label)}</span>
                               ) : (
-                                <div className="flex flex-col items-center gap-1.5 px-2 text-center">
+                                <div
+                                  className={`flex ${
+                                    isHeadboardGroup ? 'flex-row items-center gap-3 text-left' : 'flex-col items-center gap-1.5 text-center'
+                                  } w-full`}
+                                >
                                   <IconVisual
                                     icon={option.icon_url || group.icon_url}
                                     alt={option.label}
-                                    className="h-10 w-10 object-contain"
+                                    className={isHeadboardGroup ? 'h-14 w-14 object-contain' : 'h-10 w-10 object-contain'}
                                   />
-                                  <p className="text-[11px] font-semibold text-espresso leading-tight text-center break-words line-clamp-3">
-                                    {formatOptionLabel(option.label)}
-                                    {option.description && ` (${option.description})`}
-                                  </p>
-                                  <p className="text-[10px] text-muted-foreground leading-tight text-center">
-                                    {Number(option.price_delta || 0) > 0
-                                      ? `+${formatPrice(Number(option.price_delta || 0))}`
-                                      : 'Included'}
-                                  </p>
+                                  <div className={isHeadboardGroup ? 'flex flex-col gap-1' : 'flex flex-col items-center gap-1.5'}>
+                                    <p
+                                      className={`text-[11px] font-semibold text-espresso leading-tight break-words line-clamp-3 ${
+                                        isHeadboardGroup ? 'text-left' : 'text-center'
+                                      }`}
+                                    >
+                                      {formatOptionLabel(option.label)}
+                                      {option.description && ` (${option.description})`}
+                                    </p>
+                                    <p
+                                      className={`text-[10px] text-muted-foreground leading-tight ${
+                                        isHeadboardGroup ? 'text-left' : 'text-center'
+                                      }`}
+                                    >
+                                      {Number(option.price_delta || 0) > 0
+                                        ? `+${formatPrice(Number(option.price_delta || 0))}`
+                                        : 'Included'}
+                                    </p>
+                                  </div>
                                 </div>
                               )}
                               {group.kind !== 'color' && group.kind !== 'fabric' && isSelected && (
