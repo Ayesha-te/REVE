@@ -133,7 +133,69 @@ const gbpFormatter = new Intl.NumberFormat('en-GB', {
 
 
 
-const DIMENSION_SIZE_COLUMNS = ['3ft Single', '4ft Small Double', '4ft6 Double', '5ft King', '6ft Super King'];
+const DIMENSION_SIZE_COLUMNS = [
+  '2ft6 Small Single',
+  '3ft Single',
+  '4ft Small Double',
+  '4ft6 Double',
+  '5ft King',
+  '6ft Super King',
+];
+
+const DEFAULT_DIMENSION_ROWS: ProductDimensionRow[] = [
+  {
+    measurement: 'Length',
+    values: {
+      '2ft6 Small Single': '193 cm (76.0")',
+      '3ft Single': '193 cm (76.0")',
+      '4ft Small Double': '193 cm (76.0")',
+      '4ft6 Double': '193 cm (76.0")',
+      '5ft King': '203 cm (79.9")',
+      '6ft Super King': '203 cm (79.9")',
+    },
+  },
+  {
+    measurement: 'Width',
+    values: {
+      '2ft6 Small Single': '75 cm (30.0")',
+      '3ft Single': '90 cm (35.4")',
+      '4ft Small Double': '120 cm (47.2")',
+      '4ft6 Double': '135 cm (53.1")',
+      '5ft King': '150 cm (59.1")',
+      '6ft Super King': '180 cm (70.9")',
+    },
+  },
+  {
+    measurement: 'Headboard Height',
+    values: {
+      '2ft6 Small Single': '135 cm (53.1")',
+      '3ft Single': '135 cm (53.1")',
+      '4ft Small Double': '135 cm (53.1")',
+      '4ft6 Double': '135 cm (53.1")',
+      '5ft King': '135 cm (53.1")',
+      '6ft Super King': '135 cm (53.1")',
+    },
+  },
+  {
+    measurement: 'Bed Height',
+    values: {
+      '2ft6 Small Single': '35 cm (13.8")',
+      '3ft Single': '35 cm (13.8")',
+      '4ft Small Double': '35 cm (13.8")',
+      '4ft6 Double': '35 cm (13.8")',
+      '5ft King': '35 cm (13.8")',
+      '6ft Super King': '35 cm (13.8")',
+    },
+  },
+];
+
+const DEFAULT_DIMENSION_LOOKUP: Record<string, Record<string, string>> = DEFAULT_DIMENSION_ROWS.reduce(
+  (acc, row) => {
+    acc[row.measurement] = row.values || {};
+    return acc;
+  },
+  {} as Record<string, Record<string, string>>
+);
 
 
 
@@ -424,9 +486,13 @@ const ProductPage = () => {
   const [selectedColor, setSelectedColor] = useState('');
   const [selectedStyles, setSelectedStyles] = useState<Record<string, string>>({});
   const [selectedMattressId, setSelectedMattressId] = useState<number | null>(null);
+  const [isMattressOpen, setIsMattressOpen] = useState(false);
   const [selectedFabric, setSelectedFabric] = useState('');
   const [enabledGroups, setEnabledGroups] = useState<Record<string, boolean>>({});
   const [activeVariantGroupKey, setActiveVariantGroupKey] = useState('');
+  const [activeInfoTab, setActiveInfoTab] = useState<'description' | 'features' | 'dimensions' | 'delivery' | 'faqs' | null>(
+    null
+  );
   const [quantity, setQuantity] = useState(1);
   const [isZoomed, setIsZoomed] = useState(false);
   const [includeDimensions, setIncludeDimensions] = useState(true);
@@ -709,9 +775,9 @@ const ProductPage = () => {
 
         kind: 'color',
 
-        options: displayColors.map((color) => ({
+        options: displayColors.map((color, idx) => ({
 
-          key: `color-${color.id}`,
+          key: `color-${color.id ?? color.slug ?? color.name ?? idx}`,
 
           label: color.name,
 
@@ -752,7 +818,10 @@ const ProductPage = () => {
 
     }
 
-    groups.push(...styleVariantGroups);
+    // Show storage before headboard by ordering style groups: storage first, then others
+    const storageGroups = styleVariantGroups.filter((g) => /storage/i.test(g.name));
+    const nonStorageGroups = styleVariantGroups.filter((g) => !/storage/i.test(g.name));
+    groups.push(...storageGroups, ...nonStorageGroups);
 
     return groups;
 
@@ -829,9 +898,10 @@ const ProductPage = () => {
     }
 
     const styleName = group.styleName || group.name;
-
-    const match = group.options.find((option) => option.label === selectedStyles[styleName]);
-
+    const match = group.options.find(
+      (option) =>
+        option.label === selectedStyles[styleName] || option.key === selectedStyles[styleName]
+    );
     return match;
 
   };
@@ -883,11 +953,30 @@ const ProductPage = () => {
 
     (product?.short_description || '').trim() || fullDescription.split('. ')[0] || '';
 
-  const dimensionsRows = (product?.features || []).filter((feature) =>
+    const dimensionsRows = (product?.features || []).filter((feature) =>
 
-    /(dimension|height|width|length|depth|cm|mm|inch|ft)/i.test(feature)
+      /(dimension|height|width|length|depth|cm|mm|inch|ft)/i.test(feature)
 
-  );
+    );
+
+const dimensionValueForSize = (row: ProductDimensionRow, size: string): string => {
+  const direct = row.values?.[size];
+  if (direct) return String(direct);
+  const fallback = DEFAULT_DIMENSION_LOOKUP[row.measurement || '']?.[size];
+  if (fallback) return String(fallback);
+  if (size === '2ft6 Small Single') {
+    const base =
+      row.values?.['3ft Single'] ||
+      DEFAULT_DIMENSION_LOOKUP[row.measurement || '']?.['3ft Single'] ||
+      '';
+    const label = (row.measurement || '').toLowerCase();
+    if (label.includes('width')) {
+      return '75 cm (30")';
+    }
+    if (base) return String(base);
+  }
+  return '—';
+};
 
   const rawDimensionTableRows = useMemo(
 
@@ -903,48 +992,42 @@ const ProductPage = () => {
 
   );
 
-  const adjustedDimensionTableRows = useMemo(
+  const adjustedDimensionTableRows = useMemo(() => {
+    const baseRows = rawDimensionTableRows.length > 0 ? rawDimensionTableRows : DEFAULT_DIMENSION_ROWS;
 
-    () =>
-
-      wingbackSelected
-
-        ? adjustDimensionsForWingback(rawDimensionTableRows, product?.wingback_width_delta_cm || 4)
-
-        : rawDimensionTableRows,
-
-    [rawDimensionTableRows, wingbackSelected, product?.wingback_width_delta_cm]
-
-  );
-
-  const dimensionColumns = useMemo(() => {
-
-    if (adjustedDimensionTableRows.length === 0) return [];
-
-    const seen = new Set<string>();
-
-    adjustedDimensionTableRows.forEach((row) => {
-
-      Object.entries(row.values || {}).forEach(([size, value]) => {
-
-        if ((value || '').toString().trim()) {
-
-          seen.add(size.trim());
-
+    const mergedRows = baseRows.map((row) => {
+      const mergedValues: Record<string, string> = { ...(row.values || {}) };
+      DIMENSION_SIZE_COLUMNS.forEach((size) => {
+        if (!mergedValues[size]) {
+          mergedValues[size] =
+            DEFAULT_DIMENSION_LOOKUP[row.measurement || '']?.[size] ||
+            (size === '2ft6 Small Single' && (row.measurement || '').toLowerCase().includes('width')
+              ? '75 cm (30")'
+              : mergedValues['3ft Single'] ||
+                DEFAULT_DIMENSION_LOOKUP[row.measurement || '']?.['3ft Single'] ||
+                '');
         }
-
       });
-
+      return { ...row, values: mergedValues };
     });
 
-    const dynamicOrder = Array.from(seen);
+    return wingbackSelected
+      ? adjustDimensionsForWingback(mergedRows, product?.wingback_width_delta_cm || 4)
+      : mergedRows;
+  }, [rawDimensionTableRows, wingbackSelected, product?.wingback_width_delta_cm]);
 
-    const preferredOrder = DIMENSION_SIZE_COLUMNS.filter((s) => seen.has(s));
-
-    const remainder = dynamicOrder.filter((s) => !preferredOrder.includes(s));
-
+  const dimensionColumns = useMemo(() => {
+    const preferredOrder = [...DIMENSION_SIZE_COLUMNS];
+    const seen = new Set<string>();
+    adjustedDimensionTableRows.forEach((row) => {
+      Object.entries(row.values || {}).forEach(([size, value]) => {
+        if ((value || '').toString().trim()) {
+          seen.add(size.trim());
+        }
+      });
+    });
+    const remainder = Array.from(seen).filter((s) => !preferredOrder.includes(s));
     return [...preferredOrder, ...remainder];
-
   }, [adjustedDimensionTableRows]);
 
   const dimensionColumnKey = useMemo(() => dimensionColumns.join('|'), [dimensionColumns]);
@@ -1096,7 +1179,7 @@ const ProductPage = () => {
       ? Object.fromEntries(Object.entries(selectedStyles).filter(([name]) => enabledGroups[name]))
       : { ...selectedStyles };
     if (mattresses.length > 0) {
-      variantMap['Mattress'] = selectedMattress ? selectedMattress.name || 'Mattress' : 'No mattress';
+      variantMap['Mattress'] = selectedMattress ? selectedMattress.name || 'Mattress' : 'Mattress';
     }
     addItem({
       product: product as Product,
@@ -1380,74 +1463,6 @@ const ProductPage = () => {
 
             </div>
 
-            {mattresses.length > 0 && (
-              <div className="rounded-xl border border-border bg-white p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-base font-semibold">Choose a mattress</p>
-                  <span className="text-xs text-muted-foreground">Choose the best comfort</span>
-                </div>
-                <div className="flex flex-col gap-3">
-                  {mattresses.map((mattress) => (
-                    <button
-                      key={mattress.id}
-                      type="button"
-                      onClick={() => setSelectedMattressId(mattress.id)}
-                      className={`flex items-start gap-3 rounded-lg border p-3 text-left transition ${
-                        selectedMattressId === mattress.id
-                          ? 'border-primary ring-1 ring-primary/40 bg-primary/5'
-                          : 'border-border hover:border-primary/60'
-                      }`}
-                    >
-                      {mattress.image_url ? (
-                        <img
-                          src={mattress.image_url}
-                          alt={mattress.name || 'Mattress option'}
-                          className="h-16 w-20 rounded-md object-cover"
-                        />
-                      ) : (
-                        <div className="h-16 w-20 rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
-                          No image
-                        </div>
-                      )}
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="font-semibold text-foreground">{mattress.name || 'Mattress'}</p>
-                          {mattress.price !== undefined && mattress.price !== null ? (
-                            Number(mattress.price) > 0 ? (
-                              <span className="text-sm font-semibold text-primary">
-                                {formatPrice(Number(mattress.price))}
-                              </span>
-                            ) : (
-                              <span className="text-xs font-semibold text-green-700">Included</span>
-                            )
-                          ) : (
-                            <span className="text-xs font-semibold text-green-700">Included</span>
-                          )}
-                        </div>
-                        {mattress.description && (
-                          <p className="text-xs text-muted-foreground line-clamp-2">{mattress.description}</p>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                <button
-                  type="button"
-                  onClick={() => setSelectedMattressId(null)}
-                  className={`flex items-center justify-between rounded-lg border p-3 text-left transition ${
-                    selectedMattressId === null ? 'border-primary ring-1 ring-primary/40 bg-primary/5' : 'border-border hover:border-primary/60'
-                  }`}
-                >
-                  <div>
-                    <p className="font-semibold text-foreground">No mattress</p>
-                    <p className="text-xs text-muted-foreground">Keep frame only.</p>
-                  </div>
-                  <span className="text-sm font-semibold text-primary">Included</span>
-                </button>
-              </div>
-            </div>
-            )}
-
-
             {variantGroups.length > 0 && (
               <div className="space-y-6 rounded-xl border border-border bg-white p-4">
                 <div className="flex items-center justify-between">
@@ -1504,18 +1519,9 @@ const ProductPage = () => {
                                   setSelectedSize(option.label);
                                   return;
                                 }
-                                // Style group with deselect support
+                                // Style group selection (always select, no toggle-off)
                                 const styleName = group.styleName || group.name;
-                                if (isSelected) {
-                                  setSelectedStyles((prev) => {
-                                    const next = { ...prev };
-                                    delete next[styleName];
-                                    return next;
-                                  });
-                                  setEnabledGroups((prev) => ({ ...prev, [group.name]: false }));
-                                  return;
-                                }
-                                setSelectedStyles((prev) => ({ ...prev, [styleName]: option.label }));
+                                setSelectedStyles((prev) => ({ ...prev, [styleName]: option.key }));
                                 setEnabledGroups((prev) => ({ ...prev, [group.name]: true }));
                               }}
                               className={
@@ -1524,8 +1530,8 @@ const ProductPage = () => {
                                       disabled
                                         ? 'cursor-not-allowed opacity-40'
                                         : isSelected
-                                        ? 'border-primary ring-2 ring-primary/40'
-                                        : 'border-border hover:border-primary/60'
+                                        ? 'border-black ring-2 ring-black/40'
+                                        : 'border-black/60 hover:border-black'
                                     }`
                                   : group.kind === 'fabric'
                                   ? `rounded-full border px-4 py-2 text-sm font-semibold transition ${
@@ -1538,7 +1544,7 @@ const ProductPage = () => {
                                   : `relative flex ${
                                       isHeadboardGroup
                                         ? 'h-32 w-44 flex-row items-center justify-start gap-4 px-3 text-left'
-                                        : 'h-28 w-28 flex-col items-center justify-center px-2 text-center'
+                                        : 'h-32 w-28 flex-col items-center justify-center px-2 text-center'
                                     } shrink-0 rounded-lg border bg-white transition-all ${
                                       disabled
                                         ? 'cursor-not-allowed opacity-40'
@@ -1546,8 +1552,8 @@ const ProductPage = () => {
                                         ? 'border-primary bg-primary/8 ring-1 ring-primary/30'
                                         : 'border-border hover:border-primary/60'
                                     }`
-                              }
-                            >
+                            }
+                          >
                               {group.kind === 'color' ? (
                                 <>
                                   <span
@@ -1559,7 +1565,6 @@ const ProductPage = () => {
                                       backgroundPosition: 'center',
                                     }}
                                   />
-                                  {isSelected && <CheckCircle2 className="absolute right-1 top-1 h-4 w-4 text-primary drop-shadow" />}
                                   <span className="sr-only">{formatOptionLabel(option.label)}</span>
                                 </>
                               ) : group.kind === 'fabric' ? (
@@ -1573,11 +1578,11 @@ const ProductPage = () => {
                                   <IconVisual
                                     icon={option.icon_url || group.icon_url}
                                     alt={option.label}
-                                    className={isHeadboardGroup ? 'h-14 w-14 object-contain' : 'h-10 w-10 object-contain'}
+                                    className={isHeadboardGroup ? 'h-14 w-14 object-contain' : 'h-14 w-14 object-contain'}
                                   />
-                                  <div className={isHeadboardGroup ? 'flex flex-col gap-1' : 'flex flex-col items-center gap-1.5'}>
+                                  <div className={isHeadboardGroup ? 'flex flex-col gap-1' : 'flex flex-col items-center gap-1 text-center'}>
                                     <p
-                                      className={`text-[11px] font-semibold text-espresso leading-tight break-words line-clamp-3 ${
+                                      className={`text-xs font-semibold text-espresso leading-tight break-words line-clamp-3 ${
                                         isHeadboardGroup ? 'text-left' : 'text-center'
                                       }`}
                                     >
@@ -1585,7 +1590,7 @@ const ProductPage = () => {
                                       {option.description && ` (${option.description})`}
                                     </p>
                                     <p
-                                      className={`text-[10px] text-muted-foreground leading-tight ${
+                                      className={`text-[11px] text-muted-foreground leading-tight ${
                                         isHeadboardGroup ? 'text-left' : 'text-center'
                                       }`}
                                     >
@@ -1593,9 +1598,10 @@ const ProductPage = () => {
                                         ? `+${formatPrice(Number(option.price_delta || 0))}`
                                         : 'Included'}
                                     </p>
-                                  </div>
-                                </div>
-                              )}
+                </div>
+              </div>
+            )}
+
                               {group.kind !== 'color' && group.kind !== 'fabric' && isSelected && (
                                 <CheckCircle2 className="absolute right-2 top-2 h-4 w-4 text-primary" />
                               )}
@@ -1618,6 +1624,39 @@ const ProductPage = () => {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {mattresses.length > 0 && (
+              <div className="rounded-xl border border-border bg-white p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-base font-semibold">Mattress</p>
+                    <p className="text-xs text-muted-foreground">Choose after picking your style</p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => setIsMattressOpen(true)}>
+                    View mattresses
+                  </Button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMattressOpen(true)}
+                  className="flex w-full items-center justify-between rounded-lg border border-dashed border-primary/50 px-3 py-3 text-left transition hover:border-primary/70"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold text-foreground">
+                      {selectedMattress?.name || 'No mattress selected'}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {selectedMattress
+                        ? Number(selectedMattress.price ?? 0) > 0
+                          ? formatPrice(Number(selectedMattress.price))
+                          : 'Included'
+                        : 'Tap to choose a mattress'}
+                    </span>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                </button>
               </div>
             )}
 
@@ -1704,113 +1743,124 @@ const ProductPage = () => {
 
 
 
-            <Accordion type="single" collapsible className="w-full">
+            {/* Horizontal info tabs */}
+            <div className="w-full space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { key: 'description', label: 'Description', show: Boolean(fullDescription) },
+                  { key: 'features', label: 'Features', show: (product.features || []).length > 0 },
+                  { key: 'dimensions', label: 'Dimensions', show: adjustedDimensionTableRows.length > 0 },
+                  { key: 'delivery', label: 'Delivery', show: true },
+                  { key: 'faqs', label: 'FAQs', show: faqEntries.length > 0 },
+                ]
+                  .filter((t) => t.show)
+                  .map((tab) => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setActiveInfoTab(tab.key as typeof activeInfoTab)}
+                      className={`rounded-md border px-4 py-2 text-sm font-semibold transition ${
+                        activeInfoTab === tab.key
+                          ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                          : 'border-border bg-muted/60 text-foreground hover:border-primary/60'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+              </div>
 
-              {fullDescription && (
+              <div className="rounded-xl border border-border bg-card p-4">
+                {activeInfoTab === 'description' && fullDescription && (
+                  <p className="text-muted-foreground leading-relaxed">{fullDescription}</p>
+                )}
 
-                <AccordionItem value="description">
-
-                  <AccordionTrigger>Description</AccordionTrigger>
-
-                  <AccordionContent>
-
-                    <p className="text-muted-foreground">{fullDescription}</p>
-
-                  </AccordionContent>
-
-                </AccordionItem>
-
-              )}
-
-
-
-                            <AccordionItem value="features">
-
-                <AccordionTrigger>Features</AccordionTrigger>
-
-                <AccordionContent>
-
+                {activeInfoTab === 'features' && (
                   <ul className="list-disc space-y-2 pl-4">
-
                     {(product.features || []).map((feature, i) => (
-
                       <li key={i} className="text-muted-foreground">
-
                         {feature}
-
                       </li>
-
                     ))}
-
                   </ul>
+                )}
 
-                </AccordionContent>
-
-              </AccordionItem>
-
-              <AccordionItem value="delivery">
-
-                <AccordionTrigger>Delivery Information</AccordionTrigger>
-
-                <AccordionContent>
-
-                  <div className="space-y-2 text-muted-foreground">
-
-                    {product.delivery_info ? (
-
-                      <p>{product.delivery_info}</p>
-
-                    ) : (
-
-                      <>
-
-                        <p>- Free delivery on orders over 500 GBP</p>
-
-                        <p>- Standard delivery: 3-5 working days</p>
-
-                        <p>- Premium delivery with room of choice: available</p>
-
-                      </>
-
-                    )}
-
-                  </div>
-
-                </AccordionContent>
-
-              </AccordionItem>
-
-              {faqEntries.length > 0 && (
-
-                <AccordionItem value="faqs">
-
-                  <AccordionTrigger>FAQs</AccordionTrigger>
-
-                  <AccordionContent>
-
-                    <div className="space-y-4">
-
-                      {faqEntries.map((faq, i) => (
-
-                        <div key={`${faq.question}-${i}`}>
-
-                          <p className="font-medium text-foreground">{faq.question}</p>
-
-                          <p className="text-muted-foreground">{faq.answer}</p>
-
-                        </div>
-
-                      ))}
-
+                {activeInfoTab === 'dimensions' && (
+                  <div className="space-y-3">
+                    <div className="overflow-x-auto">
+                      {dimensionColumns.length > 0 && adjustedDimensionTableRows.length > 0 ? (
+                        <table className="min-w-full border border-border text-sm">
+                          <thead className="bg-muted/50">
+                            <tr>
+                              <th className="border border-border px-3 py-2 text-left font-semibold text-foreground">
+                                Measurement
+                              </th>
+                              {dimensionColumns.map((size) => (
+                                <th
+                                  key={size}
+                                  className="border border-border px-3 py-2 text-left font-semibold text-foreground whitespace-nowrap"
+                                >
+                                  {size}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {adjustedDimensionTableRows.map((row) => (
+                              <tr key={row.measurement}>
+                                <td className="border border-border px-3 py-2 font-medium text-foreground whitespace-nowrap">
+                                  {row.measurement}
+                                </td>
+                                {dimensionColumns.map((size) => (
+                                  <td
+                                    key={`${row.measurement}-${size}`}
+                                    className="border border-border px-3 py-2 text-muted-foreground whitespace-nowrap"
+                                  >
+                                    {dimensionValueForSize(row, size)}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Dimensions not available.</p>
+                      )}
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      All dimensions are approximate and may vary by ±5 cm (approximately ±2 inches) due to manufacturing tolerances.
+                    </p>
+                  </div>
+                )}
 
-                  </AccordionContent>
+                {activeInfoTab === 'delivery' && (
+                  <div className="space-y-2 text-muted-foreground">
+                    {product.delivery_info ? (
+                      <p>{product.delivery_info}</p>
+                    ) : (
+                      <>
+                        <p>- Free delivery on orders over 500 GBP</p>
+                        <p>- Standard delivery: 3-5 working days</p>
+                        <p>- Premium delivery with room of choice: available</p>
+                      </>
+                    )}
+                  </div>
+                )}
 
-                </AccordionItem>
+                {activeInfoTab === 'faqs' && faqEntries.length > 0 && (
+                  <div className="space-y-4">
+                    {faqEntries.map((faq, i) => (
+                      <div key={`${faq.question}-${i}`}>
+                        <p className="font-medium text-foreground">{faq.question}</p>
+                        <p className="text-muted-foreground">{faq.answer}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-              )}
-
-            </Accordion>
+                {!activeInfoTab && <p className="text-sm text-muted-foreground">Select a tab to view details.</p>}
+              </div>
+            </div>
 
           </div>
 
@@ -1927,6 +1977,99 @@ const ProductPage = () => {
         )}
       </main>
 
+      {isMattressOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm">
+          <div className="flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-white px-5 py-4">
+              <div>
+                <p className="text-2xl font-semibold">Choose a mattress</p>
+                <p className="text-sm text-muted-foreground">Choose the best comfort</p>
+              </div>
+              <button
+                type="button"
+                className="rounded-full p-2 hover:bg-muted"
+                onClick={() => setIsMattressOpen(false)}
+                aria-label="Close mattress list"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4 pb-24 space-y-4">
+              {mattresses.slice(0, 4).map((mattress) => (
+                <button
+                  key={mattress.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedMattressId(mattress.id);
+                    setIsMattressOpen(false);
+                  }}
+                  className={`flex items-center gap-4 rounded-xl border p-4 text-left transition ${
+                    selectedMattressId === mattress.id
+                      ? 'border-primary ring-1 ring-primary/40 bg-primary/5'
+                      : 'border-border hover:border-primary/60'
+                  }`}
+                >
+                  <span
+                    className={`h-5 w-5 shrink-0 rounded-full border-2 ${
+                      selectedMattressId === mattress.id ? 'border-primary bg-primary/80 ring-2 ring-primary/30' : 'border-muted-foreground/50'
+                    }`}
+                    aria-hidden="true"
+                  />
+                  {mattress.image_url ? (
+                    <img
+                      src={mattress.image_url}
+                      alt={mattress.name || 'Mattress option'}
+                      className="h-18 w-24 rounded-md object-cover"
+                    />
+                  ) : (
+                    <div className="h-18 w-24 rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                      No image
+                    </div>
+                  )}
+                  <div className="flex-1 space-y-1 min-h-[72px]">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-base font-semibold text-foreground leading-snug">
+                        {mattress.name || 'Mattress'}
+                      </p>
+                      {mattress.price !== undefined && mattress.price !== null ? (
+                        Number(mattress.price) > 0 ? (
+                          <span className="text-sm font-semibold text-primary whitespace-nowrap">
+                            {formatPrice(Number(mattress.price))}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-semibold text-green-700">Included</span>
+                        )
+                      ) : (
+                        <span className="text-xs font-semibold text-green-700">Included</span>
+                      )}
+                    </div>
+                    {mattress.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-2">{mattress.description}</p>
+                    )}
+                  </div>
+                </button>
+              ))}
+
+              {mattresses.length > 4 && (
+                <Link
+                  to="/category/mattresses"
+                  className="flex items-center justify-center rounded-lg border border-dashed border-primary/60 px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/5 transition"
+                >
+                  View more mattresses
+                </Link>
+              )}
+            </div>
+
+            <div className="border-t border-border px-5 py-4 bg-white">
+              <Button className="w-full" onClick={() => setIsMattressOpen(false)}>
+                Apply selection
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isDimensionsOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm">
           <div className="h-full w-full max-w-xl bg-white shadow-2xl">
@@ -1997,6 +2140,7 @@ const ProductPage = () => {
                 ) : (
                   <p className="text-sm text-muted-foreground">Select a size to see detailed measurements.</p>
                 )}
+                <p className="text-xs text-muted-foreground">All dimensions are approximate and may vary.</p>
               </div>
             </div>
           </div>
