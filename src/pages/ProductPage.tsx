@@ -166,17 +166,6 @@ const DEFAULT_DIMENSION_ROWS: ProductDimensionRow[] = [
     },
   },
   {
-    measurement: 'Headboard Height',
-    values: {
-      '2ft6 Small Single': '135 cm (53.1")',
-      '3ft Single': '135 cm (53.1")',
-      '4ft Small Double': '135 cm (53.1")',
-      '4ft6 Double': '135 cm (53.1")',
-      '5ft King': '135 cm (53.1")',
-      '6ft Super King': '135 cm (53.1")',
-    },
-  },
-  {
     measurement: 'Bed Height',
     values: {
       '2ft6 Small Single': '35 cm (13.8")',
@@ -852,15 +841,23 @@ const ProductPage = () => {
       styleVariantGroups.forEach((group) => {
 
         const styleName = group.styleName || group.name;
+        const isStorageGroup = /storage/i.test(styleName);
+        const enabled = enabledGroups[styleName] !== false;
 
         const current = prev[styleName];
 
-        const hasCurrent = group.options.some((o) => o.label === current);
+        const hasCurrent = group.options.some((o) => o.label === current || o.key === current);
 
-        if (!hasCurrent && group.options[0]) {
+        if (!enabled) {
+          // Group is disabled; leave selection cleared
+          if (current) delete next[styleName];
+          return;
+        }
 
-          next[styleName] = group.options[0].label;
-
+        if (!hasCurrent) {
+          // Keep user-optional groups (all styles) empty when invalid or deselected
+          if (current) delete next[styleName];
+          return;
         }
 
       });
@@ -869,7 +866,7 @@ const ProductPage = () => {
 
     });
 
-  }, [selectedSize, styleVariantGroups]);
+  }, [selectedSize, styleVariantGroups, enabledGroups]);
 
 
 
@@ -992,8 +989,12 @@ const dimensionValueForSize = (row: ProductDimensionRow, size: string): string =
 
   );
 
-  const adjustedDimensionTableRows = useMemo(() => {
-    const baseRows = rawDimensionTableRows.length > 0 ? rawDimensionTableRows : DEFAULT_DIMENSION_ROWS;
+const adjustedDimensionTableRows = useMemo(() => {
+    const filteredRows = rawDimensionTableRows.filter(
+      (row) => !(row.measurement || '').toLowerCase().includes('headboard height')
+    );
+
+    const baseRows = filteredRows.length > 0 ? filteredRows : DEFAULT_DIMENSION_ROWS;
 
     const mergedRows = baseRows.map((row) => {
       const mergedValues: Record<string, string> = { ...(row.values || {}) };
@@ -1387,7 +1388,7 @@ const dimensionValueForSize = (row: ProductDimensionRow, size: string): string =
 
 
 
-          <div className="space-y-6 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-2">
+          <div className="space-y-6 lg:pr-2">
 
             <div className="space-y-3">
 
@@ -1472,6 +1473,7 @@ const dimensionValueForSize = (row: ProductDimensionRow, size: string): string =
                   const selected = getSelectedOptionForGroup(group);
                   const isStyleGroup = group.kind === 'style';
                   const isHeadboardGroup = isStyleGroup && group.name.toLowerCase().includes('headboard');
+                  const isStorageGroup = isStyleGroup && /storage/i.test(group.name);
                   const groupEnabled = enabledGroups[group.name] !== false;
                   return (
                     <div key={group.key} className="space-y-3 border-b border-border/60 pb-4 last:border-0 last:pb-0">
@@ -1485,13 +1487,23 @@ const dimensionValueForSize = (row: ProductDimensionRow, size: string): string =
                                 ? `Selected: ${selected.label.replace(/(\d+)(Drawers)/i, '$1 $2')}${
                                     selected.description ? ` (${selected.description})` : ''
                                   }`
+                                : isStorageGroup
+                                ? 'Selected: No Storage'
+                                : isHeadboardGroup
+                                ? 'Selected: No Headboard'
                                 : 'Select an option'}
                             </p>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
+                      <div
+                        className={
+                          isStorageGroup
+                            ? 'grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+                            : 'flex flex-wrap gap-2'
+                        }
+                      >
                         {group.options.map((option) => {
                           const isSelected = selected?.key === option.key;
                           const disabled = false;
@@ -1519,11 +1531,27 @@ const dimensionValueForSize = (row: ProductDimensionRow, size: string): string =
                                   setSelectedSize(option.label);
                                   return;
                                 }
-                                // Style group selection (always select, no toggle-off)
-                                const styleName = group.styleName || group.name;
-                                setSelectedStyles((prev) => ({ ...prev, [styleName]: option.key }));
-                                setEnabledGroups((prev) => ({ ...prev, [group.name]: true }));
-                              }}
+                                 // Style group selection (allow toggle-off for storage)
+                                 const styleName = group.styleName || group.name;
+                                 const isStorageGroup = /storage/i.test(styleName);
+                                 const isStyleGroup = group.kind === 'style';
+                                 const isAlreadySelected = selected?.key === option.key;
+
+                                 if (isStyleGroup && isAlreadySelected) {
+                                   // Allow deselect for any style group (storage, headboard, etc.)
+                                   setSelectedStyles((prev) => {
+                                     const copy = { ...prev };
+                                     delete copy[styleName];
+                                     return copy;
+                                   });
+                                   // Keep group enabled so user can reselect
+                                   setEnabledGroups((prev) => ({ ...prev, [styleName]: true }));
+                                   return;
+                                 }
+
+                                 setSelectedStyles((prev) => ({ ...prev, [styleName]: option.key }));
+                                 setEnabledGroups((prev) => ({ ...prev, [styleName]: true }));
+                               }}
                               className={
                                 group.kind === 'color'
                                   ? `relative h-12 w-12 shrink-0 rounded-md border transition ${
@@ -1544,6 +1572,8 @@ const dimensionValueForSize = (row: ProductDimensionRow, size: string): string =
                                   : `relative flex ${
                                       isHeadboardGroup
                                         ? 'h-32 w-44 flex-row items-center justify-start gap-4 px-3 text-left'
+                                        : isStorageGroup
+                                        ? 'h-28 w-full flex-col items-center justify-center px-3 text-center'
                                         : 'h-32 w-28 flex-col items-center justify-center px-2 text-center'
                                     } shrink-0 rounded-lg border bg-white transition-all ${
                                       disabled
@@ -1713,157 +1743,125 @@ const dimensionValueForSize = (row: ProductDimensionRow, size: string): string =
 
 
 
-            <div className="grid grid-cols-3 gap-4 rounded-lg bg-card p-4">
-
-              <div className="flex flex-col items-center text-center">
-
-                <Truck className="mb-2 h-6 w-6 text-primary" />
-
-                <span className="text-xs text-muted-foreground">Free UK Delivery</span>
-
-              </div>
-
-              <div className="flex flex-col items-center text-center">
-
-                <Shield className="mb-2 h-6 w-6 text-primary" />
-
-                <span className="text-xs text-muted-foreground">10-Year Guarantee</span>
-
-              </div>
-
-              <div className="flex flex-col items-center text-center">
-
-                <CreditCard className="mb-2 h-6 w-6 text-primary" />
-
-                <span className="text-xs text-muted-foreground">Pay in 3</span>
-
-              </div>
-
-            </div>
-
-
-
-            {/* Horizontal info tabs */}
-            <div className="w-full space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { key: 'description', label: 'Description', show: Boolean(fullDescription) },
-                  { key: 'features', label: 'Features', show: (product.features || []).length > 0 },
-                  { key: 'dimensions', label: 'Dimensions', show: adjustedDimensionTableRows.length > 0 },
-                  { key: 'delivery', label: 'Delivery', show: true },
-                  { key: 'faqs', label: 'FAQs', show: faqEntries.length > 0 },
-                ]
-                  .filter((t) => t.show)
-                  .map((tab) => (
-                    <button
-                      key={tab.key}
-                      type="button"
-                      onClick={() => setActiveInfoTab(tab.key as typeof activeInfoTab)}
-                      className={`rounded-md border px-4 py-2 text-sm font-semibold transition ${
-                        activeInfoTab === tab.key
-                          ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                          : 'border-border bg-muted/60 text-foreground hover:border-primary/60'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-              </div>
-
-              <div className="rounded-xl border border-border bg-card p-4">
-                {activeInfoTab === 'description' && fullDescription && (
-                  <p className="text-muted-foreground leading-relaxed">{fullDescription}</p>
-                )}
-
-                {activeInfoTab === 'features' && (
-                  <ul className="list-disc space-y-2 pl-4">
-                    {(product.features || []).map((feature, i) => (
-                      <li key={i} className="text-muted-foreground">
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {activeInfoTab === 'dimensions' && (
-                  <div className="space-y-3">
-                    <div className="overflow-x-auto">
-                      {dimensionColumns.length > 0 && adjustedDimensionTableRows.length > 0 ? (
-                        <table className="min-w-full border border-border text-sm">
-                          <thead className="bg-muted/50">
-                            <tr>
-                              <th className="border border-border px-3 py-2 text-left font-semibold text-foreground">
-                                Measurement
-                              </th>
-                              {dimensionColumns.map((size) => (
-                                <th
-                                  key={size}
-                                  className="border border-border px-3 py-2 text-left font-semibold text-foreground whitespace-nowrap"
-                                >
-                                  {size}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {adjustedDimensionTableRows.map((row) => (
-                              <tr key={row.measurement}>
-                                <td className="border border-border px-3 py-2 font-medium text-foreground whitespace-nowrap">
-                                  {row.measurement}
-                                </td>
-                                {dimensionColumns.map((size) => (
-                                  <td
-                                    key={`${row.measurement}-${size}`}
-                                    className="border border-border px-3 py-2 text-muted-foreground whitespace-nowrap"
-                                  >
-                                    {dimensionValueForSize(row, size)}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">Dimensions not available.</p>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      All dimensions are approximate and may vary by ±5 cm (approximately ±2 inches) due to manufacturing tolerances.
-                    </p>
-                  </div>
-                )}
-
-                {activeInfoTab === 'delivery' && (
-                  <div className="space-y-2 text-muted-foreground">
-                    {product.delivery_info ? (
-                      <p>{product.delivery_info}</p>
-                    ) : (
-                      <>
-                        <p>- Free delivery on orders over 500 GBP</p>
-                        <p>- Standard delivery: 3-5 working days</p>
-                        <p>- Premium delivery with room of choice: available</p>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {activeInfoTab === 'faqs' && faqEntries.length > 0 && (
-                  <div className="space-y-4">
-                    {faqEntries.map((faq, i) => (
-                      <div key={`${faq.question}-${i}`}>
-                        <p className="font-medium text-foreground">{faq.question}</p>
-                        <p className="text-muted-foreground">{faq.answer}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {!activeInfoTab && <p className="text-sm text-muted-foreground">Select a tab to view details.</p>}
-              </div>
-            </div>
-
           </div>
 
+        </div>
+
+        {/* Info tabs full-width below purchase panel */}
+        <div className="mt-10 space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {[
+              { key: 'description', label: 'Description', show: Boolean(fullDescription) },
+              { key: 'features', label: 'Features', show: (product.features || []).length > 0 },
+              { key: 'dimensions', label: 'Dimensions', show: adjustedDimensionTableRows.length > 0 },
+              { key: 'delivery', label: 'Delivery', show: true },
+              { key: 'faqs', label: 'FAQs', show: faqEntries.length > 0 },
+            ]
+              .filter((t) => t.show)
+              .map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActiveInfoTab(tab.key as typeof activeInfoTab)}
+                  className={`rounded-md border px-4 py-2 text-sm font-semibold transition ${
+                    activeInfoTab === tab.key
+                      ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                      : 'border-border bg-muted/60 text-foreground hover:border-primary/60'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-4">
+            {activeInfoTab === 'description' && fullDescription && (
+              <p className="text-muted-foreground leading-relaxed">{fullDescription}</p>
+            )}
+
+            {activeInfoTab === 'features' && (
+              <ul className="list-disc space-y-2 pl-4">
+                {(product.features || []).map((feature, i) => (
+                  <li key={i} className="text-muted-foreground">
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {activeInfoTab === 'dimensions' && (
+              <div className="space-y-3">
+                <div className="overflow-x-auto">
+                  {dimensionColumns.length > 0 && adjustedDimensionTableRows.length > 0 ? (
+                    <table className="min-w-full border border-border text-sm">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="border border-border px-3 py-2 text-left font-semibold text-foreground">Measurement</th>
+                          {dimensionColumns.map((size) => (
+                            <th
+                              key={size}
+                              className="border border-border px-3 py-2 text-left font-semibold text-foreground whitespace-nowrap"
+                            >
+                              {size}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {adjustedDimensionTableRows.map((row) => (
+                          <tr key={row.measurement}>
+                            <td className="border border-border px-3 py-2 font-medium text-foreground whitespace-nowrap">
+                              {row.measurement}
+                            </td>
+                            {dimensionColumns.map((size) => (
+                              <td
+                                key={`${row.measurement}-${size}`}
+                                className="border border-border px-3 py-2 text-muted-foreground whitespace-nowrap"
+                              >
+                                {dimensionValueForSize(row, size)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Dimensions not available.</p>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  All dimensions are approximate and may vary by ±5 cm (approximately ±2 inches) due to manufacturing tolerances.
+                </p>
+              </div>
+            )}
+
+            {activeInfoTab === 'delivery' && (
+              <div className="space-y-2 text-muted-foreground">
+                {product.delivery_info ? (
+                  <p>{product.delivery_info}</p>
+                ) : (
+                  <>
+                    <p>- Free delivery on orders over 500 GBP</p>
+                    <p>- Standard delivery: 3-5 working days</p>
+                    <p>- Premium delivery with room of choice: available</p>
+                  </>
+                )}
+              </div>
+            )}
+
+            {activeInfoTab === 'faqs' && faqEntries.length > 0 && (
+              <div className="space-y-4">
+                {faqEntries.map((faq, i) => (
+                  <div key={`${faq.question}-${i}`}>
+                    <p className="font-medium text-foreground">{faq.question}</p>
+                    <p className="text-muted-foreground">{faq.answer}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!activeInfoTab && <p className="text-sm text-muted-foreground">Select a tab to view details.</p>}
+          </div>
         </div>
 
         <section className="mt-12 border-t pt-10" id="reviews">
@@ -2002,9 +2000,8 @@ const dimensionValueForSize = (row: ProductDimensionRow, size: string): string =
                   type="button"
                   onClick={() => {
                     setSelectedMattressId(mattress.id);
-                    setIsMattressOpen(false);
                   }}
-                  className={`flex items-center gap-4 rounded-xl border p-4 text-left transition ${
+                  className={`flex w-full min-h-[116px] items-center gap-4 rounded-xl border p-4 text-left transition ${
                     selectedMattressId === mattress.id
                       ? 'border-primary ring-1 ring-primary/40 bg-primary/5'
                       : 'border-border hover:border-primary/60'
