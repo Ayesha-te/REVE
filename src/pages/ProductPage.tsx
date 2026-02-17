@@ -1429,16 +1429,6 @@ const adjustedDimensionTableRows = useMemo(() => {
 
             )}
 
-            {/* Trust badges under gallery */}
-            <div className="mt-3 rounded-xl bg-[#F5F1EA] px-6 py-4 flex flex-wrap items-center justify-center gap-8 text-sm font-semibold text-espresso">
-              {reassuranceItems.map((item) => (
-                <span key={item.label} className="flex items-center gap-2">
-                  <item.icon className="h-5 w-5 text-bronze" />
-                  {item.label}
-                </span>
-              ))}
-            </div>
-
           </div>
 
 
