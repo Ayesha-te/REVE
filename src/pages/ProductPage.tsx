@@ -1807,7 +1807,7 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
 
         {/* Info tabs full-width below purchase panel */}
         <div className="mt-10 space-y-4">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="flex flex-nowrap gap-3 overflow-x-auto px-1" role="tablist">
             {[
               { key: 'description', label: 'Description', show: Boolean(fullDescription) },
               { key: 'features', label: 'Features', show: featureList.length > 0 },
@@ -1830,7 +1830,7 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveInfoTab(tab.key)}
-                  className={`w-full rounded-md border px-4 py-2 text-sm font-semibold transition text-center ${
+                  className={`flex-1 min-w-[140px] rounded-md border px-4 py-2 text-sm font-semibold transition text-center whitespace-nowrap ${
                     activeInfoTab === tab.key
                       ? 'border-primary bg-primary text-primary-foreground shadow-sm'
                       : 'border-border bg-muted/60 text-foreground hover:border-primary/60'
