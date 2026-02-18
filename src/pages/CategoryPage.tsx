@@ -67,6 +67,8 @@ const CategoryPage = () => {
   const [availableFilters, setAvailableFilters] = useState<FilterType[]>([]);
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>({});
 
+  const showSizeFilter = category?.slug === 'beds';
+
   useEffect(() => {
     const load = async () => {
       setIsLoading(true);
@@ -175,6 +177,7 @@ const CategoryPage = () => {
   }, [priceBounds.min, priceBounds.max]);
 
   const allSizes = useMemo(() => {
+    if (!showSizeFilter) return [];
     const sizeSet = new Set<string>();
     allProducts.forEach((p) =>
       (p.sizes || []).forEach((s) => {
@@ -183,7 +186,14 @@ const CategoryPage = () => {
       })
     );
     return Array.from(sizeSet).sort((a, b) => a.localeCompare(b));
-  }, [allProducts]);
+  }, [allProducts, showSizeFilter]);
+
+  // Clear size selections when size filter not applicable
+  useEffect(() => {
+    if (!showSizeFilter && selectedSizes.length > 0) {
+      setSelectedSizes([]);
+    }
+  }, [showSizeFilter, selectedSizes.length]);
 
   // Filter and sort products
   const filteredProducts = useMemo(() => {
@@ -195,7 +205,7 @@ const CategoryPage = () => {
     );
 
     // Size filter
-    if (selectedSizes.length > 0) {
+    if (showSizeFilter && selectedSizes.length > 0) {
       products = products.filter((p) =>
         (p.sizes || []).some((size) => selectedSizes.includes(size.name))
       );
@@ -379,6 +389,7 @@ const CategoryPage = () => {
               toggleFilterOption={toggleFilterOption}
               isLoading={isLoading}
               clearFilters={clearFilters}
+              showSizeFilter={showSizeFilter}
             />
           </aside>
 
@@ -416,6 +427,7 @@ const CategoryPage = () => {
                   toggleFilterOption={toggleFilterOption}
                   isLoading={isLoading}
                   clearFilters={clearFilters}
+                  showSizeFilter={showSizeFilter}
                 />
               </motion.div>
             </motion.div>
@@ -463,6 +475,7 @@ interface FilterContentProps {
   toggleFilterOption: (filterSlug: string, optionSlug: string) => void;
   isLoading: boolean;
   clearFilters: () => void;
+  showSizeFilter: boolean;
 }
 
 const FilterContent = ({
@@ -477,6 +490,7 @@ const FilterContent = ({
   toggleFilterOption,
   isLoading,
   clearFilters,
+  showSizeFilter,
 }: FilterContentProps) => {
   return (
     <div className="space-y-8">
@@ -497,34 +511,36 @@ const FilterContent = ({
         </div>
       </div>
 
-      {/* Sizes */}
-      <div>
-        <h4 className="mb-4 font-serif text-lg font-semibold">Size</h4>
-        {isLoading ? (
-          <div className="space-y-2">
-            {[0, 1, 2].map((skeleton) => (
-              <div key={skeleton} className="h-4 w-24 animate-pulse rounded bg-muted/60" />
-            ))}
-          </div>
-        ) : allSizes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No size options available for this category.</p>
-        ) : (
-          <div className="space-y-3">
-            {allSizes.map((size) => (
-              <div key={size} className="flex items-center gap-2">
-                <Checkbox
-                  id={`size-${size}`}
-                  checked={selectedSizes.includes(size)}
-                  onCheckedChange={() => toggleSize(size)}
-                />
-                <Label htmlFor={`size-${size}`} className="cursor-pointer text-sm">
-                  {size}
-                </Label>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Sizes (Beds only) */}
+      {showSizeFilter && (
+        <div>
+          <h4 className="mb-4 font-serif text-lg font-semibold">Size</h4>
+          {isLoading ? (
+            <div className="space-y-2">
+              {[0, 1, 2].map((skeleton) => (
+                <div key={skeleton} className="h-4 w-24 animate-pulse rounded bg-muted/60" />
+              ))}
+            </div>
+          ) : allSizes.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No size options available for this category.</p>
+          ) : (
+            <div className="space-y-3">
+              {allSizes.map((size) => (
+                <div key={size} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`size-${size}`}
+                    checked={selectedSizes.includes(size)}
+                    onCheckedChange={() => toggleSize(size)}
+                  />
+                  <Label htmlFor={`size-${size}`} className="cursor-pointer text-sm">
+                    {size}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Category/Subcategory Filters */}
       {availableFilters.length > 0 && (
