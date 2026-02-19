@@ -1703,9 +1703,9 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
             )}
 
             {featureList.length > 0 && (
-              <div className="rounded-xl border border-border bg-white p-4 space-y-2">
+              <div className="rounded-xl border border-border bg-white p-4 space-y-3">
                 <p className="text-base font-semibold">Key Features</p>
-                <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                <ul className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
                   {featureList.map((feature, i) => (
                     <li key={i}>{feature}</li>
                   ))}
