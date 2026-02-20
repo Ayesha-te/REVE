@@ -16,6 +16,7 @@ export interface CartItem {
   mattress_id?: number | null;
   mattress_name?: string | null;
   mattress_price?: number | null;
+  mattress_position?: 'top' | 'bottom' | 'both' | null;
 }
 
 interface CartState {
@@ -42,6 +43,7 @@ const getVariantsKey = (
     | 'extras_total'
     | 'include_dimension'
     | 'mattress_id'
+    | 'mattress_position'
   >
 ): string => {
   return JSON.stringify({
@@ -52,6 +54,7 @@ const getVariantsKey = (
     extras_total: item.extras_total || 0,
     include_dimension: item.include_dimension !== false,
     mattress_id: item.mattress_id || null,
+    mattress_position: item.mattress_position || null,
   });
 };
 
