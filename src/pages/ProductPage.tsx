@@ -2320,7 +2320,12 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                   type="button"
                   onClick={() => {
                     setSelectedMattressId(mattress.id);
-                    setSelectedMattressPosition(mattress.enable_bunk_positions ? 'both' : null);
+                    const isFree =
+                      Number(mattress.price ?? 0) === 0 &&
+                      Number(mattress.price_top ?? 0) === 0 &&
+                      Number(mattress.price_bottom ?? 0) === 0 &&
+                      Number(mattress.price_both ?? 0) === 0;
+                    setSelectedMattressPosition(mattress.enable_bunk_positions ? (isFree ? 'both' : 'both') : null);
                   }}
                   className={`flex w-full min-h-[116px] items-center gap-4 rounded-xl border p-4 text-left transition ${
                     selectedMattressId === mattress.id
@@ -2369,34 +2374,56 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                       <p className="text-xs text-muted-foreground line-clamp-2">{mattress.description}</p>
                     )}
                     {mattress.enable_bunk_positions && selectedMattressId === mattress.id && (
-                      <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
-                        {(['top', 'bottom', 'both'] as const).map((pos) => (
-                          <label
-                            key={pos}
-                            className={`flex items-center gap-1 rounded border px-2 py-1 cursor-pointer ${
-                              selectedMattressPosition === pos ? 'border-primary bg-primary/10 text-primary' : 'border-border'
-                            }`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedMattressPosition(pos);
-                            }}
-                          >
-                            <input
-                              type="radio"
-                              name="mattress-position"
-                              className="h-3 w-3"
-                              checked={selectedMattressPosition === pos}
-                              onChange={() => setSelectedMattressPosition(pos)}
-                            />
-                            <span className="capitalize flex flex-col leading-tight">
-                              {pos === 'top' ? 'Top' : pos === 'bottom' ? 'Bottom' : 'Both'}
-                              <span className="text-[11px] text-muted-foreground">
-                                {formatPrice(priceForPosition(mattress, pos))}
-                              </span>
-                            </span>
-                          </label>
-                        ))}
-                      </div>
+                      (() => {
+                        const isFree =
+                          Number(mattress.price ?? 0) === 0 &&
+                          Number(mattress.price_top ?? 0) === 0 &&
+                          Number(mattress.price_bottom ?? 0) === 0 &&
+                          Number(mattress.price_both ?? 0) === 0;
+                        const disablePositions = !isFree;
+                        return (
+                          <div className="mt-2 space-y-2">
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              {(['top', 'bottom', 'both'] as const).map((pos) => (
+                                <label
+                                  key={pos}
+                                  className={`flex min-w-[96px] flex-col items-center gap-1 rounded-md border px-3 py-2 text-sm whitespace-normal ${
+                                    selectedMattressPosition === pos ? 'border-primary bg-primary/10 text-primary' : 'border-border'
+                                  } ${disablePositions ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                                  onClick={(e) => {
+                                    if (disablePositions) return;
+                                    e.stopPropagation();
+                                    setSelectedMattressPosition(pos);
+                                  }}
+                                >
+                                  <input
+                                    type="radio"
+                                    name="mattress-position"
+                                    className="h-3 w-3"
+                                    checked={selectedMattressPosition === pos}
+                                    onChange={() => {
+                                      if (disablePositions) return;
+                                      setSelectedMattressPosition(pos);
+                                    }}
+                                    disabled={disablePositions}
+                                  />
+                                  <span className="flex flex-col items-center leading-tight text-xs capitalize">
+                                    <span>{pos === 'top' ? 'Top' : pos === 'bottom' ? 'Bottom' : 'Both'}</span>
+                                    <span className="text-[11px] text-muted-foreground">
+                                      {formatPrice(priceForPosition(mattress, pos))}
+                                    </span>
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                            {disablePositions && (
+                              <p className="text-[11px] text-muted-foreground">
+                                Paid mattress replaces the included one for both bunks.
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()
                     )}
                   </div>
                 </button>
