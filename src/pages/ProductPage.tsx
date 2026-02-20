@@ -544,7 +544,6 @@ const ProductPage = () => {
   const [quantity, setQuantity] = useState(1);
   const [isZoomed, setIsZoomed] = useState(false);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
-  const [hiddenDimensionColumns, setHiddenDimensionColumns] = useState<Set<string>>(new Set());
   const [includeDimensions, setIncludeDimensions] = useState(true);
   const [selectedDimension, setSelectedDimension] = useState<string | null>(null);
   const [isDimensionsOpen, setIsDimensionsOpen] = useState(false);
@@ -601,7 +600,6 @@ const ProductPage = () => {
         setSelectedImage(0);
         setIsGalleryOpen(false);
         setIsZoomed(false);
-        setHiddenDimensionColumns(new Set());
         setActiveInfoTab(null);
         setSelectedMattressId(null);
         if (fetched?.id) {
@@ -747,22 +745,6 @@ const ProductPage = () => {
     if (!totalImages) return;
     setSelectedImage((prev) => (prev - 1 + totalImages) % totalImages);
   };
-
-  const hideDimensionColumn = (size: string) =>
-    setHiddenDimensionColumns((prev) => {
-      const next = new Set(prev);
-      next.add(size);
-      return next;
-    });
-
-  const showDimensionColumn = (size: string) =>
-    setHiddenDimensionColumns((prev) => {
-      const next = new Set(prev);
-      next.delete(size);
-      return next;
-    });
-
-  const resetDimensionColumns = () => setHiddenDimensionColumns(new Set());
 
   const sizeOptions = productSizes.map((size, index) =>
     parseSizeOption(size.name, index, size.description || '', Number(size.price_delta ?? 0))
@@ -1143,12 +1125,7 @@ const adjustedDimensionTableRows = useMemo(() => {
     return [...ordered, ...remainder];
   }, [adjustedDimensionTableRows]);
 
-  const visibleDimensionColumns = useMemo(
-    () => dimensionColumns.filter((col) => !hiddenDimensionColumns.has(col)),
-    [dimensionColumns, hiddenDimensionColumns]
-  );
-
-  const dimensionColumnKey = useMemo(() => visibleDimensionColumns.join('|'), [visibleDimensionColumns]);
+  const dimensionColumnKey = useMemo(() => dimensionColumns.join('|'), [dimensionColumns]);
 
   const selectedDimensionDetails = useMemo(() => {
 
@@ -1174,7 +1151,7 @@ const adjustedDimensionTableRows = useMemo(() => {
 
   useEffect(() => {
 
-    if (visibleDimensionColumns.length === 0) {
+    if (dimensionColumns.length === 0) {
 
       setSelectedDimension(null);
 
@@ -1183,16 +1160,16 @@ const adjustedDimensionTableRows = useMemo(() => {
     }
 
     setSelectedDimension((prev) =>
-      prev && visibleDimensionColumns.includes(prev) ? prev : visibleDimensionColumns[0]
+      prev && dimensionColumns.includes(prev) ? prev : dimensionColumns[0]
     );
 
-  }, [visibleDimensionColumns]);
+  }, [dimensionColumns]);
 
 
 
   useEffect(() => {
 
-    if (selectedSize && visibleDimensionColumns.includes(selectedSize)) {
+    if (selectedSize && dimensionColumns.includes(selectedSize)) {
 
       setSelectedDimension(selectedSize);
 
@@ -1789,7 +1766,7 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                           );
                         })}
                       </div>
-                      {visibleDimensionColumns.length > 0 && group.kind === 'size' && (
+                      {dimensionColumns.length > 0 && group.kind === 'size' && (
                         <div className="pt-3">
                           <button
                             type="button"
@@ -1970,12 +1947,12 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
             {activeInfoTab === 'dimensions' && (
               <div className="space-y-3">
                 <div className="overflow-x-auto">
-                  {visibleDimensionColumns.length > 0 && adjustedDimensionTableRows.length > 0 ? (
+                  {dimensionColumns.length > 0 && adjustedDimensionTableRows.length > 0 ? (
                     <table className="min-w-full border border-border text-sm">
                       <thead className="bg-muted/50">
                         <tr>
                           <th className="border border-border px-3 py-2 text-left font-semibold text-foreground">Measurement</th>
-                          {visibleDimensionColumns.map((size) => (
+                          {dimensionColumns.map((size) => (
                             <th
                               key={size}
                               className="border border-border px-3 py-2 text-left font-semibold text-foreground whitespace-nowrap"
@@ -1991,7 +1968,7 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                             <td className="border border-border px-3 py-2 font-medium text-foreground whitespace-nowrap">
                               {row.measurement}
                             </td>
-                            {visibleDimensionColumns.map((size) => (
+                            {dimensionColumns.map((size) => (
                               <td
                                 key={`${row.measurement}-${size}`}
                                 className="border border-border px-3 py-2 text-muted-foreground whitespace-nowrap"
@@ -2390,11 +2367,11 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
             </div>
 
             <div className="h-[calc(100%-64px)] overflow-y-auto px-6 py-5">
-              {(visibleDimensionColumns.length > 0 || hiddenDimensionColumns.size > 0) && (
+              {dimensionColumns.length > 0 && (
                 <div className="space-y-3">
                   <p className="text-base font-semibold">Select Size</p>
                   <div className="flex flex-wrap gap-2">
-                    {visibleDimensionColumns.map((size) => (
+                    {dimensionColumns.map((size) => (
                       <button
                         key={size}
                         type="button"
@@ -2408,51 +2385,6 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                         {size}
                       </button>
                     ))}
-                    {visibleDimensionColumns.length === 0 && (
-                      <span className="text-xs text-muted-foreground">All columns hidden. Restore below.</span>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold text-muted-foreground">Hide columns for this product</p>
-                    <div className="flex flex-wrap gap-2">
-                      {visibleDimensionColumns.map((size) => (
-                        <button
-                          key={`hide-${size}`}
-                          type="button"
-                          onClick={() => hideDimensionColumn(size)}
-                          className="rounded-full border border-border bg-muted/60 px-3 py-1 text-xs font-semibold text-espresso hover:border-destructive/60 hover:text-destructive"
-                        >
-                          Hide {size}
-                        </button>
-                      ))}
-                    </div>
-                    {hiddenDimensionColumns.size > 0 && (
-                      <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <span className="font-semibold text-muted-foreground">Hidden:</span>
-                        {Array.from(hiddenDimensionColumns).map((size) => (
-                          <button
-                            key={`show-${size}`}
-                            type="button"
-                            onClick={() => showDimensionColumn(size)}
-                            className="rounded-full border border-primary/60 bg-primary/10 px-3 py-1 font-semibold text-primary hover:bg-primary/20"
-                          >
-                            Show {size}
-                          </button>
-                        ))}
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={resetDimensionColumns}
-                          className="h-8 px-3"
-                        >
-                          Reset
-                        </Button>
-                      </div>
-                    )}
-                    {visibleDimensionColumns.length === 0 && hiddenDimensionColumns.size === 0 && (
-                      <span className="text-xs text-muted-foreground">No dimension columns available.</span>
-                    )}
                   </div>
                   <label className="flex items-center gap-2 text-xs md:text-sm">
                     <input
