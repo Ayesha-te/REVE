@@ -632,9 +632,11 @@ const ProductPage = () => {
 
       }
 
-        if (fetched?.fabrics?.length && fetched.fabrics[0]?.colors?.length) {
-          const firstWithImage = fetched.fabrics[0].colors.find((c) => c.image_url) || fetched.fabrics[0].colors[0];
-          setSelectedFabric(fetched.fabrics[0].name);
+        const firstFabricWithColors = (fetched?.fabrics || []).find((f) => (f.colors || []).length > 0);
+        if (firstFabricWithColors) {
+          const firstWithImage =
+            firstFabricWithColors.colors.find((c) => c.image_url) || firstFabricWithColors.colors[0];
+          setSelectedFabric(firstFabricWithColors.name);
           setSelectedColor(firstWithImage?.name || '');
         } else if (fetched?.colors?.length) {
           setSelectedColor(fetched.colors[0].name);
@@ -840,7 +842,7 @@ const ProductPage = () => {
 
     const groups: VariantGroup[] = [];
 
-    const fabrics = product?.fabrics || [];
+    const fabrics = (product?.fabrics || []).filter((f) => (f.colors || []).length > 0);
 
     if (fabrics.length > 0) {
       groups.push({
@@ -1091,7 +1093,7 @@ const adjustedDimensionTableRows = useMemo(() => {
       (row) => !(row.measurement || '').toLowerCase().includes('headboard height')
     );
 
-    const baseRows = filteredRows.length > 0 ? filteredRows : DEFAULT_DIMENSION_ROWS;
+    if (filteredRows.length === 0) return [];
 
     // Only include sizes that actually exist in the product data; fall back to defaults if none present.
     const allowedSizes = (() => {
@@ -1104,7 +1106,7 @@ const adjustedDimensionTableRows = useMemo(() => {
       return seen.size > 0 ? Array.from(seen) : [...DIMENSION_SIZE_COLUMNS];
     })();
 
-    const mergedRows = baseRows.map((row) => {
+    const mergedRows = filteredRows.map((row) => {
       const mergedValues: Record<string, string> = { ...(row.values || {}) };
       allowedSizes.forEach((size) => {
         if (!mergedValues[size]) {
@@ -1135,7 +1137,7 @@ const adjustedDimensionTableRows = useMemo(() => {
         }
       });
     });
-    if (seen.size === 0) return preferredOrder;
+    if (seen.size === 0) return [];
     const ordered = preferredOrder.filter((s) => seen.has(s));
     const remainder = Array.from(seen).filter((s) => !preferredOrder.includes(s));
     return [...ordered, ...remainder];
