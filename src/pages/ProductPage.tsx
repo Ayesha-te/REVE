@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
 
   ChevronRight,
+  ChevronLeft,
 
   Minus,
 
@@ -24,6 +25,7 @@ import {
   X,
   Wallet,
   BadgeDollarSign,
+  Maximize2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -199,10 +201,24 @@ const renderMultilineParagraphs = (value?: string) => {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line, idx) => (
-      <p key={`${line}-${idx}`} className={idx === 0 ? 'font-semibold whitespace-pre-line' : 'whitespace-pre-line'}>
-        {line}
-      </p>
+      <p
+        key={`${line}-${idx}`}
+        className={idx === 0 ? 'font-semibold whitespace-pre-line' : 'whitespace-pre-line'}
+        dangerouslySetInnerHTML={{ __html: renderRichText(line) }}
+      />
     ));
+};
+
+const escapeHtml = (value?: string) =>
+  (value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+// Minimal rich text: only **bold** is allowed; everything else is escaped.
+const renderRichText = (value?: string) => {
+  const safe = escapeHtml(value);
+  return safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 };
 
 
@@ -527,6 +543,8 @@ const ProductPage = () => {
   const [activeInfoTab, setActiveInfoTab] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [isZoomed, setIsZoomed] = useState(false);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [hiddenDimensionColumns, setHiddenDimensionColumns] = useState<Set<string>>(new Set());
   const [includeDimensions, setIncludeDimensions] = useState(true);
   const [selectedDimension, setSelectedDimension] = useState<string | null>(null);
   const [isDimensionsOpen, setIsDimensionsOpen] = useState(false);
@@ -580,6 +598,10 @@ const ProductPage = () => {
         const fetched = normalizedProducts[0] || null;
 
         setProduct(fetched);
+        setSelectedImage(0);
+        setIsGalleryOpen(false);
+        setIsZoomed(false);
+        setHiddenDimensionColumns(new Set());
         setActiveInfoTab(null);
         setSelectedMattressId(null);
         if (fetched?.id) {
@@ -674,6 +696,7 @@ const ProductPage = () => {
 
 
   const productImages = product?.images || [];
+  const totalImages = productImages.length;
 
   const productSizes = product?.sizes || [];
   const sizeIconsEnabled = product?.show_size_icons !== false;
@@ -704,6 +727,40 @@ const ProductPage = () => {
     }
 
   }, [fabricColors, availableColors, displayColors, selectedColor]);
+
+  const openGallery = () => {
+    if (!totalImages) return;
+    setIsZoomed(false);
+    setIsGalleryOpen(true);
+  };
+
+  const closeGallery = () => setIsGalleryOpen(false);
+
+  const goToNextImage = () => {
+    if (!totalImages) return;
+    setSelectedImage((prev) => (prev + 1) % totalImages);
+  };
+
+  const goToPrevImage = () => {
+    if (!totalImages) return;
+    setSelectedImage((prev) => (prev - 1 + totalImages) % totalImages);
+  };
+
+  const hideDimensionColumn = (size: string) =>
+    setHiddenDimensionColumns((prev) => {
+      const next = new Set(prev);
+      next.add(size);
+      return next;
+    });
+
+  const showDimensionColumn = (size: string) =>
+    setHiddenDimensionColumns((prev) => {
+      const next = new Set(prev);
+      next.delete(size);
+      return next;
+    });
+
+  const resetDimensionColumns = () => setHiddenDimensionColumns(new Set());
 
   const sizeOptions = productSizes.map((size, index) =>
     parseSizeOption(size.name, index, size.description || '', Number(size.price_delta ?? 0))
@@ -992,7 +1049,6 @@ const ProductPage = () => {
   const fullDescription = (product?.description || '').trim();
 
   const shortDescription =
-
     (product?.short_description || '').trim() || fullDescription.split('. ')[0] || '';
 
   const featureList = useMemo(() => normalizeFeatures(product?.features), [product?.features]);
@@ -1020,19 +1076,15 @@ const ProductPage = () => {
     return '—';
   };
 
-  const rawDimensionTableRows = useMemo(
-
-    () =>
-
-      (product?.computed_dimensions || product?.dimensions || []).filter(
-
-        (row) => row?.measurement && row?.values && Object.keys(row.values).length > 0
-
-      ),
-
-    [product?.computed_dimensions, product?.dimensions]
-
-  );
+  const rawDimensionTableRows = useMemo(() => {
+    const explicitDimensions = (product?.dimensions || []).filter(
+      (row) => row?.measurement && row?.values && Object.keys(row.values).length > 0
+    );
+    if (explicitDimensions.length > 0) return explicitDimensions;
+    return (product?.computed_dimensions || []).filter(
+      (row) => row?.measurement && row?.values && Object.keys(row.values).length > 0
+    );
+  }, [product?.computed_dimensions, product?.dimensions]);
 
 const adjustedDimensionTableRows = useMemo(() => {
     const filteredRows = rawDimensionTableRows.filter(
@@ -1041,9 +1093,20 @@ const adjustedDimensionTableRows = useMemo(() => {
 
     const baseRows = filteredRows.length > 0 ? filteredRows : DEFAULT_DIMENSION_ROWS;
 
+    // Only include sizes that actually exist in the product data; fall back to defaults if none present.
+    const allowedSizes = (() => {
+      const seen = new Set<string>();
+      filteredRows.forEach((row) => {
+        Object.entries(row.values || {}).forEach(([size, value]) => {
+          if (String(value || '').trim()) seen.add(size.trim());
+        });
+      });
+      return seen.size > 0 ? Array.from(seen) : [...DIMENSION_SIZE_COLUMNS];
+    })();
+
     const mergedRows = baseRows.map((row) => {
       const mergedValues: Record<string, string> = { ...(row.values || {}) };
-      DIMENSION_SIZE_COLUMNS.forEach((size) => {
+      allowedSizes.forEach((size) => {
         if (!mergedValues[size]) {
           mergedValues[size] =
             DEFAULT_DIMENSION_LOOKUP[row.measurement || '']?.[size] ||
@@ -1072,11 +1135,18 @@ const adjustedDimensionTableRows = useMemo(() => {
         }
       });
     });
+    if (seen.size === 0) return preferredOrder;
+    const ordered = preferredOrder.filter((s) => seen.has(s));
     const remainder = Array.from(seen).filter((s) => !preferredOrder.includes(s));
-    return [...preferredOrder, ...remainder];
+    return [...ordered, ...remainder];
   }, [adjustedDimensionTableRows]);
 
-  const dimensionColumnKey = useMemo(() => dimensionColumns.join('|'), [dimensionColumns]);
+  const visibleDimensionColumns = useMemo(
+    () => dimensionColumns.filter((col) => !hiddenDimensionColumns.has(col)),
+    [dimensionColumns, hiddenDimensionColumns]
+  );
+
+  const dimensionColumnKey = useMemo(() => visibleDimensionColumns.join('|'), [visibleDimensionColumns]);
 
   const selectedDimensionDetails = useMemo(() => {
 
@@ -1102,7 +1172,7 @@ const adjustedDimensionTableRows = useMemo(() => {
 
   useEffect(() => {
 
-    if (dimensionColumns.length === 0) {
+    if (visibleDimensionColumns.length === 0) {
 
       setSelectedDimension(null);
 
@@ -1110,15 +1180,17 @@ const adjustedDimensionTableRows = useMemo(() => {
 
     }
 
-    setSelectedDimension((prev) => (prev && dimensionColumns.includes(prev) ? prev : dimensionColumns[0]));
+    setSelectedDimension((prev) =>
+      prev && visibleDimensionColumns.includes(prev) ? prev : visibleDimensionColumns[0]
+    );
 
-  }, [dimensionColumns]);
+  }, [visibleDimensionColumns]);
 
 
 
   useEffect(() => {
 
-    if (selectedSize && dimensionColumns.includes(selectedSize)) {
+    if (selectedSize && visibleDimensionColumns.includes(selectedSize)) {
 
       setSelectedDimension(selectedSize);
 
@@ -1351,6 +1423,34 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
 
 
 
+              {totalImages > 1 && (
+                <div className="pointer-events-none absolute inset-x-0 bottom-4 flex flex-col items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openGallery();
+                    }}
+                    className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-black/70 px-4 py-2 text-sm font-medium text-white backdrop-blur"
+                    aria-label="Open full gallery"
+                  >
+                    <Maximize2 className="h-4 w-4" />
+                    <span>Click to expand</span>
+                  </button>
+                  <div className="pointer-events-none flex items-center gap-1">
+                    {productImages.map((_, idx) => (
+                      <span
+                        key={`dot-${idx}`}
+                        className={`h-2 w-2 rounded-full bg-white transition-all ${
+                          selectedImage === idx ? 'opacity-100' : 'opacity-50'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+
               <div className="absolute right-4 top-4 flex flex-col gap-2 items-end">
 
                 {product.is_bestseller && (
@@ -1431,7 +1531,10 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
 
               </h1>
 
-              <p className="text-base text-muted-foreground">{shortDescription}</p>
+              <p
+                className="text-base text-muted-foreground"
+                dangerouslySetInnerHTML={{ __html: renderRichText(shortDescription) }}
+              />
 
             </div>
 
@@ -1684,7 +1787,7 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                           );
                         })}
                       </div>
-                      {dimensionColumns.length > 0 && group.kind === 'size' && (
+                      {visibleDimensionColumns.length > 0 && group.kind === 'size' && (
                         <div className="pt-3">
                           <button
                             type="button"
@@ -1707,7 +1810,10 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                 <p className="text-base font-semibold">Key Features</p>
                 <ul className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
                   {featureList.map((feature, i) => (
-                    <li key={i}>{feature}</li>
+                    <li
+                      key={i}
+                      dangerouslySetInnerHTML={{ __html: renderRichText(feature) }}
+                    />
                   ))}
                 </ul>
               </div>
@@ -1853,18 +1959,21 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
 
           <div className="rounded-xl border border-border bg-card p-4">
             {activeInfoTab === 'description' && fullDescription && (
-              <p className="text-muted-foreground leading-relaxed">{fullDescription}</p>
+              <div
+                className="text-muted-foreground leading-relaxed space-y-2"
+                dangerouslySetInnerHTML={{ __html: renderRichText(fullDescription) }}
+              />
             )}
 
             {activeInfoTab === 'dimensions' && (
               <div className="space-y-3">
                 <div className="overflow-x-auto">
-                  {dimensionColumns.length > 0 && adjustedDimensionTableRows.length > 0 ? (
+                  {visibleDimensionColumns.length > 0 && adjustedDimensionTableRows.length > 0 ? (
                     <table className="min-w-full border border-border text-sm">
                       <thead className="bg-muted/50">
                         <tr>
                           <th className="border border-border px-3 py-2 text-left font-semibold text-foreground">Measurement</th>
-                          {dimensionColumns.map((size) => (
+                          {visibleDimensionColumns.map((size) => (
                             <th
                               key={size}
                               className="border border-border px-3 py-2 text-left font-semibold text-foreground whitespace-nowrap"
@@ -1880,7 +1989,7 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                             <td className="border border-border px-3 py-2 font-medium text-foreground whitespace-nowrap">
                               {row.measurement}
                             </td>
-                            {dimensionColumns.map((size) => (
+                            {visibleDimensionColumns.map((size) => (
                               <td
                                 key={`${row.measurement}-${size}`}
                                 className="border border-border px-3 py-2 text-muted-foreground whitespace-nowrap"
@@ -1932,7 +2041,10 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                 {faqEntries.map((faq, i) => (
                   <div key={`${faq.question}-${i}`}>
                     <p className="font-medium text-foreground">{faq.question}</p>
-                    <p className="text-muted-foreground whitespace-pre-line">{faq.answer}</p>
+                    <p
+                      className="text-muted-foreground whitespace-pre-line"
+                      dangerouslySetInnerHTML={{ __html: renderRichText(faq.answer) }}
+                    />
                   </div>
                 ))}
               </div>
@@ -2062,6 +2174,106 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
         )}
       </main>
 
+      {isGalleryOpen && totalImages > 0 && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur-sm"
+          onClick={closeGallery}
+        >
+          <div
+            className="relative w-full max-w-5xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="absolute right-3 top-3 rounded-full bg-black/60 p-2 text-white hover:bg-black/70"
+              onClick={closeGallery}
+              aria-label="Close image gallery"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <img
+              src={productImages[selectedImage]?.url}
+              alt={`${product.name} large view`}
+              className="h-full w-full max-h-[80vh] rounded-lg bg-black/20 object-contain"
+            />
+            {totalImages > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={goToPrevImage}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-3 text-white hover:bg-black/70"
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={goToNextImage}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-3 text-white hover:bg-black/70"
+                  aria-label="Next image"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+                <div className="absolute inset-x-0 bottom-4 flex flex-col items-center gap-3 px-3">
+                  <div className="flex items-center gap-1 rounded-full bg-black/60 px-3 py-2">
+                    {productImages.map((_, idx) => (
+                      <button
+                        key={`lightbox-dot-${idx}`}
+                        type="button"
+                        onClick={() => setSelectedImage(idx)}
+                        className={`h-2.5 w-2.5 rounded-full transition ${
+                          selectedImage === idx ? 'bg-white' : 'bg-white/50'
+                        }`}
+                        aria-label={`View image ${idx + 1}`}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex max-w-4xl items-center gap-2 rounded-xl bg-black/60 px-3 py-2 shadow-lg backdrop-blur">
+                    <button
+                      type="button"
+                      onClick={goToPrevImage}
+                      className="rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+                      aria-label="Previous thumbnail"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto scrollbar-thin scrollbar-thumb-white/30 scrollbar-track-transparent">
+                      {productImages.map((img, idx) => (
+                        <button
+                          key={`lightbox-thumb-${idx}`}
+                          type="button"
+                          onClick={() => setSelectedImage(idx)}
+                          className={`relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md border transition ${
+                            selectedImage === idx
+                              ? 'border-white ring-2 ring-white/80'
+                              : 'border-white/30 hover:border-white/60'
+                          }`}
+                          aria-label={`View image ${idx + 1}`}
+                        >
+                          <img
+                            src={img.url}
+                            alt={`${product.name} thumb ${idx + 1}`}
+                            className="h-full w-full object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={goToNextImage}
+                      className="rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+                      aria-label="Next thumbnail"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {isMattressOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm">
           <div className="flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
@@ -2176,11 +2388,11 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
             </div>
 
             <div className="h-[calc(100%-64px)] overflow-y-auto px-6 py-5">
-              {dimensionColumns.length > 0 && (
+              {(visibleDimensionColumns.length > 0 || hiddenDimensionColumns.size > 0) && (
                 <div className="space-y-3">
                   <p className="text-base font-semibold">Select Size</p>
                   <div className="flex flex-wrap gap-2">
-                    {dimensionColumns.map((size) => (
+                    {visibleDimensionColumns.map((size) => (
                       <button
                         key={size}
                         type="button"
@@ -2194,6 +2406,51 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                         {size}
                       </button>
                     ))}
+                    {visibleDimensionColumns.length === 0 && (
+                      <span className="text-xs text-muted-foreground">All columns hidden. Restore below.</span>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground">Hide columns for this product</p>
+                    <div className="flex flex-wrap gap-2">
+                      {visibleDimensionColumns.map((size) => (
+                        <button
+                          key={`hide-${size}`}
+                          type="button"
+                          onClick={() => hideDimensionColumn(size)}
+                          className="rounded-full border border-border bg-muted/60 px-3 py-1 text-xs font-semibold text-espresso hover:border-destructive/60 hover:text-destructive"
+                        >
+                          Hide {size}
+                        </button>
+                      ))}
+                    </div>
+                    {hiddenDimensionColumns.size > 0 && (
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="font-semibold text-muted-foreground">Hidden:</span>
+                        {Array.from(hiddenDimensionColumns).map((size) => (
+                          <button
+                            key={`show-${size}`}
+                            type="button"
+                            onClick={() => showDimensionColumn(size)}
+                            className="rounded-full border border-primary/60 bg-primary/10 px-3 py-1 font-semibold text-primary hover:bg-primary/20"
+                          >
+                            Show {size}
+                          </button>
+                        ))}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={resetDimensionColumns}
+                          className="h-8 px-3"
+                        >
+                          Reset
+                        </Button>
+                      </div>
+                    )}
+                    {visibleDimensionColumns.length === 0 && hiddenDimensionColumns.size === 0 && (
+                      <span className="text-xs text-muted-foreground">No dimension columns available.</span>
+                    )}
                   </div>
                   <label className="flex items-center gap-2 text-xs md:text-sm">
                     <input
