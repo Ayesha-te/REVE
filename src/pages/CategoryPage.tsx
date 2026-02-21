@@ -346,7 +346,7 @@ const CategoryPage = () => {
               </>
             )}
           </nav>
-          <div className="space-y-3 text-left">
+          <div className="space-y-3 text-left max-w-4xl md:max-w-5xl lg:max-w-6xl">
             <motion.h1
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -359,7 +359,7 @@ const CategoryPage = () => {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.05 }}
-                className="max-w-3xl text-base text-muted-foreground"
+                className="text-base leading-7 text-muted-foreground"
               >
                 {heroDescription}
               </motion.p>
@@ -541,7 +541,7 @@ const FilterContent = ({
       </div>
 
       {/* Sizes (Beds only) */}
-      {showSizeFilter && (
+      {showSizeFilter && (isLoading || allSizes.length > 0) && (
         <div>
           <h4 className="mb-4 font-serif text-lg font-semibold">Size</h4>
           {isLoading ? (
@@ -550,8 +550,6 @@ const FilterContent = ({
                 <div key={skeleton} className="h-4 w-24 animate-pulse rounded bg-muted/60" />
               ))}
             </div>
-          ) : allSizes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No size options available for this category.</p>
           ) : (
             <div className="space-y-3">
               {allSizes.map((size) => (
