@@ -30,21 +30,39 @@ const Header = () => {
   useEffect(() => {
     const loadNav = async () => {
       try {
-        const categories = await apiGet<Category[]>('/categories/');
-        const subcategories = await apiGet<SubCategory[]>('/subcategories/');
+        // Fetch in parallel to avoid waiting for one before the other
+        const [categories, subcategories] = await Promise.all([
+          apiGet<Category[]>('/categories/'),
+          apiGet<SubCategory[]>('/subcategories/'),
+        ]);
 
-        const dynamicLinks = categories.map((cat) => {
-          const children = subcategories
-            .filter((sub) => sub.category === cat.id)
-            .map((sub) => ({
-              name: sub.name,
-              href: `/category/${cat.slug}?sub=${sub.slug}`,
-            }));
+        // Keep navigation predictable: sort categories and subcategories alphabetically
+        const sortedCategories = [...categories].sort((a, b) =>
+          a.name.localeCompare(b.name)
+        );
+        const subsByCategory = subcategories.reduce<Record<number, SubCategory[]>>(
+          (acc, sub) => {
+            acc[sub.category] = acc[sub.category] || [];
+            acc[sub.category].push(sub);
+            return acc;
+          },
+          {}
+        );
+
+        Object.values(subsByCategory).forEach((list) =>
+          list.sort((a, b) => a.name.localeCompare(b.name))
+        );
+
+        const dynamicLinks = sortedCategories.map((cat) => {
+          const children = subsByCategory[cat.id]?.map((sub) => ({
+            name: sub.name,
+            href: `/category/${cat.slug}?sub=${sub.slug}`,
+          }));
 
           return {
             name: cat.name,
             href: `/category/${cat.slug}`,
-            children: children.length ? children : undefined,
+            children: children && children.length ? children : undefined,
           };
         });
 
