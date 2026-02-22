@@ -52,7 +52,7 @@ import Footer from '@/components/Footer';
 import ProductCard from '@/components/ProductCard';
 
 import { apiGet, apiPost } from '@/lib/api';
-import { Category, Product, ProductDimensionRow, Review, ProductMattress } from '@/lib/types';
+import { Category, Collection, Product, ProductDimensionRow, Review, ProductMattress } from '@/lib/types';
 import { useCart } from '@/context/CartContext';
 
 import { toast } from 'sonner';
@@ -522,6 +522,8 @@ const ProductPage = () => {
   const [category, setCategory] = useState<Category | null>(null);
 
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [seriesCollection, setSeriesCollection] = useState<Collection | null>(null);
+  const [seriesProducts, setSeriesProducts] = useState<Product[]>([]);
 
 
 
@@ -567,6 +569,47 @@ const ProductPage = () => {
     }
   };
 
+  const loadSeriesProducts = useCallback(
+    async (currentProduct: Product | null) => {
+      if (!currentProduct?.id) {
+        setSeriesCollection(null);
+        setSeriesProducts([]);
+        return;
+      }
+
+      try {
+        const collectionsRes = await apiGet<Collection[] | { results?: Collection[] }>('/collections/');
+        const collections = Array.isArray(collectionsRes)
+          ? collectionsRes
+          : Array.isArray((collectionsRes as { results?: Collection[] }).results)
+          ? ((collectionsRes as { results: Collection[] }).results)
+          : [];
+
+        const matchedCollection = collections.find((collection) => {
+          const productIds = (collection.products || []).concat(
+            (collection.products_data || []).map((p) => p.id)
+          );
+          return productIds.includes(currentProduct.id);
+        });
+
+        if (matchedCollection) {
+          setSeriesCollection(matchedCollection);
+          const others = (matchedCollection.products_data || []).filter(
+            (p) => p.id !== currentProduct.id
+          );
+          setSeriesProducts(others.slice(0, 3));
+        } else {
+          setSeriesCollection(null);
+          setSeriesProducts([]);
+        }
+      } catch {
+        setSeriesCollection(null);
+        setSeriesProducts([]);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     const load = async () => {
 
@@ -575,6 +618,7 @@ const ProductPage = () => {
       if (!slug) {
 
         setProduct(null);
+        await loadSeriesProducts(null);
 
         setIsLoading(false);
 
@@ -599,6 +643,7 @@ const ProductPage = () => {
         const fetched = normalizedProducts[0] || null;
 
         setProduct(fetched);
+        await loadSeriesProducts(fetched);
         setSelectedImage(0);
         setIsGalleryOpen(false);
         setIsZoomed(false);
@@ -697,6 +742,7 @@ const ProductPage = () => {
       } catch {
 
         setProduct(null);
+        await loadSeriesProducts(null);
 
         setIsLoading(false);
 
@@ -706,7 +752,7 @@ const ProductPage = () => {
 
     load();
 
-  }, [slug]);
+  }, [slug, loadSeriesProducts]);
 
 
 
@@ -2351,6 +2397,36 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
             )}
           </div>
         </section>
+
+        {seriesProducts.length > 0 && (
+          <section className="mt-16">
+            <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="font-serif text-2xl font-bold">
+                  {seriesCollection?.name
+                    ? `More from ${seriesCollection.name}`
+                    : 'More from this range'}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Discover matching pieces from the same collection.
+                </p>
+              </div>
+              {seriesCollection?.slug && (
+                <Link
+                  to={`/collections#${seriesCollection.slug}`}
+                  className="text-sm font-semibold text-primary hover:underline"
+                >
+                  View full collection
+                </Link>
+              )}
+            </div>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {seriesProducts.map((p, index) => (
+                <ProductCard key={p.id} product={p} index={index} />
+              ))}
+            </div>
+          </section>
+        )}
 
 
         {relatedProducts.length > 0 && (
