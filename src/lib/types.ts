@@ -157,6 +157,7 @@ export interface Product {
   custom_info_sections?: { title?: string; content?: string }[];
   delivery_charges?: number;
   dimension_paragraph?: string;
+  dimension_images?: { size: string; url: string }[];
   show_dimensions_table?: boolean;
   in_stock: boolean;
   is_bestseller: boolean;

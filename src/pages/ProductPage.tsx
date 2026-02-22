@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import type { CSSProperties } from 'react';
 
 import { useParams, Link } from 'react-router-dom';
@@ -618,12 +618,14 @@ const ProductPage = () => {
               Number(m.price_both ?? 0) === 0
           );
           if (freeMattress?.id) {
-            setSelectedMattresses([
-              {
-                id: freeMattress.id,
-                position: freeMattress.enable_bunk_positions ? 'both' : null,
-              },
-            ]);
+            setSelectedMattresses(() =>
+              normalizeBunkMattressSelections([
+                {
+                  id: freeMattress.id,
+                  position: freeMattress.enable_bunk_positions ? 'both' : null,
+                },
+              ])
+            );
           }
         }
 
@@ -742,6 +744,17 @@ const ProductPage = () => {
 
   const displayColors = (availableColors || []).filter((c) => c.image_url);
 
+  const fabricColorOptions = useMemo(() => {
+    return (product?.fabrics || []).flatMap((fabric) =>
+      (fabric.colors || []).map((color) => ({
+        value: `${fabric.name}__${color.name}`,
+        fabric: fabric.name,
+        color: color.name,
+        label: `${color.name} — ${fabric.name}`,
+      }))
+    );
+  }, [product?.fabrics]);
+
   useEffect(() => {
     // If current selection no longer exists, clear it instead of auto-selecting first color
     const names = new Set(displayColors.map((c) => c.name).concat(availableColors.map((c) => c.name)));
@@ -749,6 +762,82 @@ const ProductPage = () => {
       setSelectedColor('');
     }
   }, [fabricColors, availableColors, displayColors, selectedColor]);
+
+  const mattressMap = useMemo(() => {
+    const map: Record<number, ProductMattress> = {};
+    (product?.mattresses || []).forEach((m) => {
+      if (m.id) map[m.id] = m;
+    });
+    return map;
+  }, [product?.mattresses]);
+
+  const bunkMattressRulesEnabled = useMemo(
+    () => (product?.mattresses || []).some((m) => m.enable_bunk_positions),
+    [product?.mattresses]
+  );
+
+  const normalizeBunkMattressSelections = useCallback(
+    (list: SelectedMattressPick[]): SelectedMattressPick[] => {
+      if (!bunkMattressRulesEnabled) return list;
+
+      const reversed = [...list].reverse(); // latest selections first
+      let topTaken = false;
+      let bottomTaken = false;
+      let bothPick: SelectedMattressPick | null = null;
+      const kept: SelectedMattressPick[] = [];
+
+      for (const sel of reversed) {
+        const mattress = sel.id ? mattressMap[sel.id] : undefined;
+        const isBunk = Boolean(mattress?.enable_bunk_positions);
+
+        if (isBunk && sel.position === 'both') {
+          bothPick = sel;
+          break; // "both" overrides other bunk selections
+        }
+      }
+
+      if (bothPick) {
+        return list.filter((sel) => {
+          const mattress = sel.id ? mattressMap[sel.id] : undefined;
+          const isBunk = Boolean(mattress?.enable_bunk_positions);
+          if (!isBunk) return true;
+          return sel.id === bothPick!.id && sel.position === 'both';
+        });
+      }
+
+      for (const sel of reversed) {
+        const mattress = sel.id ? mattressMap[sel.id] : undefined;
+        const isBunk = Boolean(mattress?.enable_bunk_positions);
+        const pos = sel.position;
+
+        if (!isBunk) {
+          kept.push(sel);
+          continue;
+        }
+
+        if (pos === 'top') {
+          if (topTaken) continue;
+          topTaken = true;
+          kept.push(sel);
+          continue;
+        }
+
+        if (pos === 'bottom') {
+          if (bottomTaken) continue;
+          bottomTaken = true;
+          kept.push(sel);
+          continue;
+        }
+
+        if (pos) {
+          kept.push(sel);
+        }
+      }
+
+      return kept.reverse();
+    },
+    [bunkMattressRulesEnabled, mattressMap]
+  );
 
   const openGallery = () => {
     if (!totalImages) return;
@@ -1119,6 +1208,92 @@ const ProductPage = () => {
     );
   }, [product?.computed_dimensions, product?.dimensions, showDimensionsTable]);
   const dimensionParagraph = (product as Product | undefined)?.dimension_paragraph?.trim() || '';
+  const dimensionImages = (product as Product | undefined)?.dimension_images || [];
+  const matchedDimensionImages = useMemo(() => {
+    if (!Array.isArray(dimensionImages)) return [];
+    if (selectedDimension) {
+      return dimensionImages.filter(
+        (img) => (img.size || '').toLowerCase().trim() === selectedDimension.toLowerCase().trim()
+      );
+    }
+    return dimensionImages;
+  }, [dimensionImages, selectedDimension]);
+
+  const mattressMap = useMemo(() => {
+    const map: Record<number, ProductMattress> = {};
+    (product?.mattresses || []).forEach((m) => {
+      if (m.id) map[m.id] = m;
+    });
+    return map;
+  }, [product?.mattresses]);
+
+  const bunkMattressRulesEnabled = useMemo(
+    () => (product?.mattresses || []).some((m) => m.enable_bunk_positions),
+    [product?.mattresses]
+  );
+
+  const normalizeBunkMattressSelections = useCallback(
+    (list: SelectedMattressPick[]): SelectedMattressPick[] => {
+      if (!bunkMattressRulesEnabled) return list;
+
+      const reversed = [...list].reverse(); // latest selections first
+      let topTaken = false;
+      let bottomTaken = false;
+      let bothPick: SelectedMattressPick | null = null;
+      const kept: SelectedMattressPick[] = [];
+
+      for (const sel of reversed) {
+        const mattress = sel.id ? mattressMap[sel.id] : undefined;
+        const isBunk = Boolean(mattress?.enable_bunk_positions);
+
+        if (isBunk && sel.position === 'both') {
+          bothPick = sel;
+          break; // "both" overrides other bunk selections
+        }
+      }
+
+      if (bothPick) {
+        return list.filter((sel) => {
+          const mattress = sel.id ? mattressMap[sel.id] : undefined;
+          const isBunk = Boolean(mattress?.enable_bunk_positions);
+          if (!isBunk) return true;
+          return sel.id === bothPick!.id && sel.position === 'both';
+        });
+      }
+
+      for (const sel of reversed) {
+        const mattress = sel.id ? mattressMap[sel.id] : undefined;
+        const isBunk = Boolean(mattress?.enable_bunk_positions);
+        const pos = sel.position;
+
+        if (!isBunk) {
+          kept.push(sel);
+          continue;
+        }
+
+        if (pos === 'top') {
+          if (topTaken) continue;
+          topTaken = true;
+          kept.push(sel);
+          continue;
+        }
+
+        if (pos === 'bottom') {
+          if (bottomTaken) continue;
+          bottomTaken = true;
+          kept.push(sel);
+          continue;
+        }
+
+        if (pos) {
+          kept.push(sel);
+        }
+      }
+
+      return kept.reverse();
+    },
+    [bunkMattressRulesEnabled, mattressMap]
+  );
 
 const adjustedDimensionTableRows = useMemo(() => {
     const filteredRows = rawDimensionTableRows.filter(
@@ -1666,6 +1841,8 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                                 ? `Selected: ${selected.label.replace(/(\d+)(Drawers)/i, '$1 $2')}${
                                     selected.description ? ` (${selected.description})` : ''
                                   }`
+                                : group.kind === 'fabric'
+                                ? 'Selected: No color binding'
                                 : isStorageGroup
                                 ? 'Selected: No Storage'
                                 : isHeadboardGroup
@@ -1676,154 +1853,175 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                         </div>
                       </div>
 
-                      <div
-                        className={
-                          isStorageGroup
-                            ? 'grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
-                            : isHeadboardGroup
-                            ? 'grid gap-3'
-                            : 'flex flex-wrap gap-2'
-                        }
-                        style={headboardGridStyle}
-                      >
-                        {group.options.map((option) => {
-                          const isSelected = selected?.key === option.key;
-                          const disabled = false;
-                          const shouldShowIcon = !(group.kind === 'size' && !sizeIconsEnabled);
-                          return (
-                            <button
-                              key={option.key}
-                              type="button"
-                              disabled={disabled}
-                              onClick={() => {
-                                if (group.kind === 'fabric') {
-                                  setSelectedFabric(option.label);
-                                  const firstColor = (product?.fabrics || []).find((f) => f.name === option.label)?.colors?.[0];
-                                  if (firstColor?.name) {
-                                    setSelectedColor(firstColor.name);
-                                  } else {
-                                    setSelectedColor('');
+                      {group.kind === 'fabric' ? (
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-foreground">Optional: bind to color</label>
+                          {fabricColorOptions.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">No fabric colors available.</p>
+                          ) : (
+                            <select
+                              className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                              value={
+                                selectedFabric && selectedColor ? `${selectedFabric}__${selectedColor}` : '__none__'
+                              }
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                if (value === '__none__') {
+                                  setSelectedFabric('');
+                                  setSelectedColor('');
+                                  return;
+                                }
+                                const [fabricName, colorName] = value.split('__');
+                                setSelectedFabric(fabricName || '');
+                                setSelectedColor(colorName || '');
+                              }}
+                            >
+                              <option value="__none__">No color binding</option>
+                              {fabricColorOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          <p className="text-xs text-muted-foreground">Choose a fabric colour; leave blank for no binding.</p>
+                        </div>
+                      ) : (
+                        <div
+                          className={
+                            isStorageGroup
+                              ? 'grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+                              : isHeadboardGroup
+                              ? 'grid gap-3'
+                              : 'flex flex-wrap gap-2'
+                          }
+                          style={headboardGridStyle}
+                        >
+                          {group.options.map((option) => {
+                            const isSelected = selected?.key === option.key;
+                            const disabled = false;
+                            const shouldShowIcon = !(group.kind === 'size' && !sizeIconsEnabled);
+                            return (
+                              <button
+                                key={option.key}
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => {
+                                  if (group.kind === 'color') {
+                                    setSelectedColor((prev) => (prev === option.label ? '' : option.label));
+                                    return;
                                   }
-                                  return;
-                                }
-                                if (group.kind === 'color') {
-                                  setSelectedColor((prev) => (prev === option.label ? '' : option.label));
-                                  return;
-                                }
-                                if (group.kind === 'size') {
-                                  setSelectedSize(option.label);
-                                  return;
-                                }
-                                 // Style group selection (allow toggle-off for storage)
-                                 const styleName = group.styleName || group.name;
-                                 const isStorageGroup = /storage/i.test(styleName);
-                                 const isStyleGroup = group.kind === 'style';
-                                 const isAlreadySelected = selected?.key === option.key;
+                                  if (group.kind === 'size') {
+                                    setSelectedSize(option.label);
+                                    return;
+                                  }
+                                   // Style group selection (allow toggle-off for storage)
+                                   const styleName = group.styleName || group.name;
+                                   const isStorageGroup = /storage/i.test(styleName);
+                                   const isStyleGroup = group.kind === 'style';
+                                   const isAlreadySelected = selected?.key === option.key;
 
-                                 if (isStyleGroup && isAlreadySelected) {
-                                   // Allow deselect for any style group (storage, headboard, etc.)
-                                   setSelectedStyles((prev) => {
-                                     const copy = { ...prev };
-                                     delete copy[styleName];
-                                     return copy;
-                                   });
-                                   // Keep group enabled so user can reselect
+                                   if (isStyleGroup && isAlreadySelected) {
+                                     // Allow deselect for any style group (storage, headboard, etc.)
+                                     setSelectedStyles((prev) => {
+                                       const copy = { ...prev };
+                                       delete copy[styleName];
+                                       return copy;
+                                     });
+                                     // Keep group enabled so user can reselect
+                                     setEnabledGroups((prev) => ({ ...prev, [styleName]: true }));
+                                     return;
+                                   }
+
+                                   setSelectedStyles((prev) => ({ ...prev, [styleName]: option.key }));
                                    setEnabledGroups((prev) => ({ ...prev, [styleName]: true }));
-                                   return;
-                                 }
-
-                                 setSelectedStyles((prev) => ({ ...prev, [styleName]: option.key }));
-                                 setEnabledGroups((prev) => ({ ...prev, [styleName]: true }));
-                               }}
-                              className={
-                                group.kind === 'color'
-                                  ? `relative h-12 w-12 shrink-0 rounded-md border transition ${
-                                      disabled
-                                        ? 'cursor-not-allowed opacity-40'
-                                        : isSelected
-                                        ? 'border-black ring-2 ring-black/40'
-                                        : 'border-black/60 hover:border-black'
-                                    }`
-                                  : group.kind === 'fabric'
-                                  ? `rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                                      disabled
-                                        ? 'cursor-not-allowed opacity-40'
-                                        : isSelected
-                                        ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/30'
-                                        : 'border-border hover:border-primary/60'
-                                    }`
-                                  : `relative flex ${
-                                      isHeadboardGroup
-                                        ? 'h-32 w-full flex-row items-center justify-start gap-4 px-3 text-left'
-                                        : isStorageGroup
-                                        ? 'h-28 w-full flex-col items-center justify-center px-3 text-center'
-                                        : 'h-32 w-28 flex-col items-center justify-center px-2 text-center'
-                                    } shrink-0 rounded-lg border bg-white transition-all ${
-                                      disabled
-                                        ? 'cursor-not-allowed opacity-40'
-                                        : isSelected
-                                        ? 'border-primary bg-primary/8 ring-1 ring-primary/30'
-                                        : 'border-border hover:border-primary/60'
-                                    }`
-                            }
-                          >
-                              {group.kind === 'color' ? (
-                                <>
-                                  <span
-                                    className="absolute inset-0 rounded-md"
-                                    style={{
-                                      backgroundColor: option.color_code || '#f3f4f6',
-                                      backgroundImage: option.icon_url ? `url(${option.icon_url})` : undefined,
-                                      backgroundSize: 'cover',
-                                      backgroundPosition: 'center',
-                                    }}
-                                  />
-                                  <span className="sr-only">{formatOptionLabel(option.label)}</span>
-                                </>
-                              ) : group.kind === 'fabric' ? (
-                                <span>{formatOptionLabel(option.label)}</span>
-                              ) : (
-                                <div
-                                  className={`flex ${
-                                    isHeadboardGroup ? 'flex-row items-center gap-3 text-left' : 'flex-col items-center gap-1.5 text-center'
-                                  } w-full`}
-                                >
-                                  {shouldShowIcon && (
-                                    <IconVisual
-                                      icon={option.icon_url || group.icon_url}
-                                      alt={option.label}
-                                      className={isHeadboardGroup ? 'h-14 w-14 object-contain' : 'h-14 w-14 object-contain'}
+                                 }}
+                                className={
+                                  group.kind === 'color'
+                                    ? `relative h-12 w-12 shrink-0 rounded-md border transition ${
+                                        disabled
+                                          ? 'cursor-not-allowed opacity-40'
+                                          : isSelected
+                                          ? 'border-black ring-2 ring-black/40'
+                                          : 'border-black/60 hover:border-black'
+                                      }`
+                                    : `relative flex ${
+                                        isHeadboardGroup
+                                          ? 'h-32 w-full flex-row items-center justify-start gap-4 px-3 text-left'
+                                          : isStorageGroup
+                                          ? 'h-28 w-full flex-col items-center justify-center px-3 text-center'
+                                          : 'h-32 w-28 flex-col items-center justify-center px-2 text-center'
+                                      } shrink-0 rounded-lg border bg-white transition-all ${
+                                        disabled
+                                          ? 'cursor-not-allowed opacity-40'
+                                          : isSelected
+                                          ? 'border-primary bg-primary/8 ring-1 ring-primary/30'
+                                          : 'border-border hover:border-primary/60'
+                                      }`
+                              }
+                            >
+                                {group.kind === 'color' ? (
+                                  <>
+                                    <span
+                                      className="absolute inset-0 rounded-md"
+                                      style={{
+                                        backgroundColor: option.color_code || '#f3f4f6',
+                                        backgroundImage: option.icon_url ? `url(${option.icon_url})` : undefined,
+                                        backgroundSize: 'cover',
+                                        backgroundPosition: 'center',
+                                      }}
                                     />
-                                  )}
-                                  <div className={isHeadboardGroup ? 'flex flex-col gap-1' : 'flex flex-col items-center gap-1 text-center'}>
-                                    <p
-                                      className={`text-xs font-semibold text-espresso leading-tight break-words line-clamp-3 ${
-                                        isHeadboardGroup ? 'text-left' : 'text-center'
-                                      }`}
+                                    <span className="sr-only">{formatOptionLabel(option.label)}</span>
+                                  </>
+                                ) : (
+                                  <div
+                                    className={`flex ${
+                                      isHeadboardGroup
+                                        ? 'flex-row items-center gap-3 text-left'
+                                        : 'flex-col items-center gap-1.5 text-center'
+                                    } w-full`}
+                                  >
+                                    {shouldShowIcon && (
+                                      <IconVisual
+                                        icon={option.icon_url || group.icon_url}
+                                        alt={option.label}
+                                        className={isHeadboardGroup ? 'h-14 w-14 object-contain' : 'h-14 w-14 object-contain'}
+                                      />
+                                    )}
+                                    <div
+                                      className={
+                                        isHeadboardGroup ? 'flex flex-col gap-1' : 'flex flex-col items-center gap-1 text-center'
+                                      }
                                     >
-                                      {formatOptionLabel(option.label)}
-                                      {option.description && ` (${option.description})`}
-                                    </p>
-                                    <p
-                                      className={`text-[11px] text-muted-foreground leading-tight ${
-                                        isHeadboardGroup ? 'text-left' : 'text-center'
-                                      }`}
-                                    >
-                                      {Number(option.price_delta || 0) > 0
-                                        ? `+${formatPrice(Number(option.price_delta || 0))}`
-                                        : 'Included'}
-                                    </p>
-                </div>
-              </div>
-            )}
+                                      <p
+                                        className={`text-xs font-semibold text-espresso leading-tight break-words line-clamp-3 ${
+                                          isHeadboardGroup ? 'text-left' : 'text-center'
+                                        }`}
+                                      >
+                                        {formatOptionLabel(option.label)}
+                                        {option.description && ` (${option.description})`}
+                                      </p>
+                                      <p
+                                        className={`text-[11px] text-muted-foreground leading-tight ${
+                                          isHeadboardGroup ? 'text-left' : 'text-center'
+                                        }`}
+                                      >
+                                        {Number(option.price_delta || 0) > 0
+                                          ? `+${formatPrice(Number(option.price_delta || 0))}`
+                                          : 'Included'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
 
-                              {group.kind !== 'color' && group.kind !== 'fabric' && isSelected && (
-                                <CheckCircle2 className="absolute right-2 top-2 h-4 w-4 text-primary" />
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
+                                {group.kind !== 'color' && isSelected && (
+                                  <CheckCircle2 className="absolute right-2 top-2 h-4 w-4 text-primary" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                       {dimensionColumns.length > 0 && group.kind === 'size' && (
                         <div className="pt-3">
                           <button
@@ -2005,10 +2203,21 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
             {activeInfoTab === 'dimensions' && (
               <div className="space-y-3">
                 <div className="overflow-x-auto">
-                  {dimensionParagraph && (
-                    <div className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground leading-relaxed mb-2">
-                      {dimensionParagraph}
+                  {matchedDimensionImages.length > 0 && (
+                    <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 mb-3">
+                      {matchedDimensionImages.map((img, idx) => (
+                        <div key={`${img.size}-${idx}`} className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
+                          <p className="text-xs font-semibold text-muted-foreground">{img.size || selectedDimension || 'Dimensions'}</p>
+                          <img src={img.url} alt={`${img.size || 'Dimensions'} illustration`} className="w-full h-auto max-h-64 object-contain rounded" />
+                        </div>
+                      ))}
                     </div>
+                  )}
+                  {dimensionParagraph && (
+                    <div
+                      className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground leading-relaxed mb-2 whitespace-pre-line"
+                      dangerouslySetInnerHTML={{ __html: renderRichText(dimensionParagraph).replace(/\n/g, '<br/>') }}
+                    />
                   )}
                   {dimensionColumns.length > 0 && adjustedDimensionTableRows.length > 0 ? (
                     <table className="min-w-full border border-border text-sm">
@@ -2357,16 +2566,19 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                     onClick={() => {
                       setSelectedMattresses((prev) => {
                         const existing = prev.find((m) => m.id === mattress.id);
+                        let next: SelectedMattressPick[];
                         if (existing) {
-                          return prev.filter((m) => m.id !== mattress.id);
+                          next = prev.filter((m) => m.id !== mattress.id);
+                        } else {
+                          next = [
+                            ...prev,
+                            {
+                              id: mattress.id,
+                              position: mattress.enable_bunk_positions ? 'both' : null,
+                            },
+                          ];
                         }
-                        return [
-                          ...prev,
-                          {
-                            id: mattress.id,
-                            position: mattress.enable_bunk_positions ? 'both' : null,
-                          },
-                        ];
+                        return normalizeBunkMattressSelections(next);
                       });
                     }}
                     className={`w-full rounded-2xl border p-4 text-left shadow-sm transition hover:shadow-md ${
@@ -2428,11 +2640,12 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                                   } ${pos === 'top' ? 'rounded-l-lg' : pos === 'both' ? 'rounded-r-lg' : ''}`}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setSelectedMattresses((prev) =>
-                                      prev.map((m) =>
+                                    setSelectedMattresses((prev) => {
+                                      const next = prev.map((m) =>
                                         m.id === mattress.id ? { ...m, position: pos } : m
-                                      )
-                                    );
+                                      );
+                                      return normalizeBunkMattressSelections(next);
+                                    });
                                   }}
                                 >
                                   <span className="flex items-center gap-2 capitalize">
@@ -2529,6 +2742,22 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
               )}
 
               <div className="mt-5 space-y-3">
+                {matchedDimensionImages.length > 0 && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {matchedDimensionImages.map((img, idx) => (
+                      <div key={`${img.size}-${idx}`} className="rounded-lg border border-border bg-muted/20 p-3">
+                        <p className="text-xs font-semibold text-muted-foreground mb-2">
+                          {img.size || selectedDimension || 'Dimensions'}
+                        </p>
+                        <img
+                          src={img.url}
+                          alt={`${img.size || 'Dimensions'} illustration`}
+                          className="w-full h-auto max-h-72 object-contain rounded"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {selectedDimension && adjustedDimensionTableRows.length > 0 ? (
                   <div className="divide-y rounded-lg border">
                     {adjustedDimensionTableRows.map((row) => (
