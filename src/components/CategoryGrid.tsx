@@ -1,20 +1,60 @@
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, ArrowRight } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { apiGet } from '@/lib/api';
-import { Collection } from '@/lib/types';
+import { Category, Product } from '@/lib/types';
 
 const CategoryGrid = () => {
-  const [collections, setCollections] = useState<Collection[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  const resolveImageUrl = useMemo(
+    () => (value?: string) => {
+      const raw = (value || '').trim();
+      if (!raw) return '';
+      if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) return raw;
+      if (raw.startsWith('//')) return `https:${raw}`;
+      const base = import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_API_BASE_URL || '';
+      if (raw.startsWith('/')) {
+        try {
+          return base ? new URL(raw, base).toString() : '';
+        } catch {
+          return '';
+        }
+      }
+      return '';
+    },
+    []
+  );
 
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await apiGet<Collection[]>('/collections/');
-        setCollections(data.slice(0, 4));
+        const data = await apiGet<Category[]>('/categories/');
+        const topCategories = data.slice(0, 4);
+
+        const withImages = await Promise.all(
+          topCategories.map(async (category, index) => {
+            let image = resolveImageUrl(category.image);
+
+            if (!image) {
+              try {
+                const products = await apiGet<Product[]>(`/products/?category=${category.slug}`);
+                image = resolveImageUrl(products?.[0]?.images?.[0]?.url);
+              } catch {
+                image = '';
+              }
+            }
+
+            if (!image) return null;
+            return { ...category, image, id: category.id ?? index };
+          })
+        );
+
+        const valid = withImages.filter((c): c is Category => Boolean(c));
+        setCategories(valid);
       } catch {
-        setCollections([]);
+        setCategories([]);
       }
     };
     load();
@@ -30,10 +70,10 @@ const CategoryGrid = () => {
               Explore Our Range
             </span>
             <h2 className="font-serif text-4xl font-bold text-foreground md:text-5xl">
-              Shop by Collection
+              Shop by Category
             </h2>
             <p className="mt-3 max-w-md text-muted-foreground">
-              Discover our handcrafted collections, designed for comfort and built to last
+              Discover our handcrafted ranges, designed for comfort and built to last
             </p>
           </div>
           
@@ -43,8 +83,8 @@ const CategoryGrid = () => {
               size="lg"
               className="group gradient-bronze text-base font-semibold"
             >
-              <Link to="/collections">
-                View All Collections
+              <Link to="/categories">
+                View All Categories
                 <ArrowRight className="ml-2 h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
               </Link>
             </Button>
@@ -52,19 +92,20 @@ const CategoryGrid = () => {
         </div>
 
         {/* Category Grid - 4 items */}
-        <div className="grid gap-4 md:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 auto-rows-[240px] md:auto-rows-[260px]">
-          {collections.map((collection) => (
+        {categories.length > 0 && (
+          <div className="grid gap-4 md:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 auto-rows-[240px] md:auto-rows-[260px]">
+            {categories.map((category) => (
             <div 
-              key={collection.id}
+              key={category.id}
             >
               <Link
-                to={`/category/${collection.slug || 'divan-beds'}`}
+                to={`/category/${category.slug || 'divan-beds'}`}
                 className="group relative flex h-full w-full overflow-hidden rounded-2xl"
               >
                 {/* Image with Parallax Effect */}
                 <div
                   className="absolute inset-0 bg-cover bg-center transition-all duration-700 ease-out group-hover:scale-105"
-                  style={{ backgroundImage: `url(${collection.image})` }}
+                  style={{ backgroundImage: `url(${resolveImageUrl(category.image)})` }}
                 />
                 
                 {/* Gradient Overlay */}
@@ -85,7 +126,7 @@ const CategoryGrid = () => {
                   {/* Top - Category Badge */}
                   <div className="flex items-start justify-between">
                     <span className="rounded-full bg-cream/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-cream backdrop-blur-sm">
-                      Collection
+                      Category
                     </span>
                     <div 
                       className="flex h-9 w-9 items-center justify-center rounded-full bg-cream/10 text-cream backdrop-blur-sm transition-all duration-300 group-hover:bg-primary group-hover:text-primary-foreground"
@@ -97,11 +138,11 @@ const CategoryGrid = () => {
                   {/* Bottom - Category Info */}
                   <div className="space-y-2">
                     <h3 className="font-serif text-xl font-semibold text-cream md:text-2xl transition-transform duration-300 group-hover:translate-x-2">
-                      {collection.name}
+                      {category.name}
                     </h3>
                     <div className="flex items-center gap-3">
                       <p className="text-xs text-cream/70 line-clamp-1 max-w-[180px]">
-                        {collection.description}
+                        {category.description}
                       </p>
                       <span className="h-px flex-1 bg-cream/20 transition-all duration-500 group-hover:bg-primary/50" />
                     </div>
@@ -109,8 +150,9 @@ const CategoryGrid = () => {
                 </div>
               </Link>
             </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
