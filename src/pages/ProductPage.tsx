@@ -1290,16 +1290,12 @@ const ProductPage = () => {
   );
 
 const adjustedDimensionTableRows = useMemo(() => {
-    const filteredRows = rawDimensionTableRows.filter(
-      (row) => !(row.measurement || '').toLowerCase().includes('headboard height')
-    );
-
-    if (filteredRows.length === 0) return [];
+    if (rawDimensionTableRows.length === 0) return [];
 
     // Only include sizes that actually exist in the product data; fall back to defaults if none present.
     const allowedSizes = (() => {
       const seen = new Set<string>();
-      filteredRows.forEach((row) => {
+      rawDimensionTableRows.forEach((row) => {
         Object.entries(row.values || {}).forEach(([size, value]) => {
           if (String(value || '').trim()) seen.add(size.trim());
         });
@@ -1307,7 +1303,7 @@ const adjustedDimensionTableRows = useMemo(() => {
       return seen.size > 0 ? Array.from(seen) : [...DIMENSION_SIZE_COLUMNS];
     })();
 
-    const mergedRows = filteredRows.map((row) => {
+    const mergedRows = rawDimensionTableRows.map((row) => {
       const mergedValues: Record<string, string> = { ...(row.values || {}) };
       allowedSizes.forEach((size) => {
         if (!mergedValues[size]) {
