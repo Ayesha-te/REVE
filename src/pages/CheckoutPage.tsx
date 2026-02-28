@@ -165,6 +165,12 @@ const CheckoutPage = () => {
       const orderRes = await apiPost<{ id: number }>('/orders/', orderPayload);
       localStorage.setItem('last_order_id', String(orderRes.id));
 
+      if (paymentMethod === 'cod') {
+        setStep('confirmation');
+        clearCart();
+        return;
+      }
+
       if (paymentMethod === 'card') {
         try {
           const session = await apiPost<{ url: string; id: string }>('/payments/create_stripe_session/', {
@@ -175,6 +181,7 @@ const CheckoutPage = () => {
             })),
             delivery_charges: String(deliveryFee),
             currency: 'gbp',
+            order_id: orderRes.id,
             success_url: `${window.location.origin}/checkout?success=1`,
             cancel_url: `${window.location.origin}/checkout?canceled=1`,
           });
@@ -183,10 +190,12 @@ const CheckoutPage = () => {
             return;
           } else {
             toast.error('Failed to initialize payment. Please try again.');
+            return;
           }
         } catch (error) {
           console.error('Stripe session creation failed:', error);
           toast.error('Payment initialization failed. Please try again.');
+          return;
         }
       }
 
@@ -196,6 +205,7 @@ const CheckoutPage = () => {
           {
             total: orderTotal.toFixed(2),
             currency: 'GBP',
+            order_id: orderRes.id,
             return_url: `${window.location.origin}/checkout?success=1`,
             cancel_url: `${window.location.origin}/checkout?canceled=1`,
           }
@@ -205,10 +215,9 @@ const CheckoutPage = () => {
           window.location.href = approvalLink.href;
           return;
         }
+        toast.error('Failed to initialize PayPal. Please try again.');
+        return;
       }
-
-      setStep('confirmation');
-      clearCart();
     } catch (err) {
       toast.error('Order failed. Please try again.');
     } finally {
