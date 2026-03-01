@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import type { CSSProperties } from 'react';
 
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -513,7 +513,10 @@ const paymentIcons = [
 const ProductPage = () => {
 
   const { slug } = useParams<{ slug: string }>();
-
+  const [searchParams] = useSearchParams();
+  const selectForBedSlug = searchParams.get('select-for-bed') || '';
+  const linkedBedSize = searchParams.get('bed-size') || '';
+  
   const [product, setProduct] = useState<Product | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -648,30 +651,28 @@ const ProductPage = () => {
         setIsZoomed(false);
         setActiveInfoTab(null);
         setSelectedMattresses([]);
-        if (fetched?.id) {
-          fetchReviews(fetched.id);
-        }
-
-        // Default mattress selection: auto-pick included option when present
-        if (Array.isArray(fetched?.mattresses) && fetched.mattresses.length > 0) {
-          const freeMattress = fetched.mattresses.find(
-            (m) =>
-              Number(m.price ?? 0) === 0 &&
-              Number(m.price_top ?? 0) === 0 &&
-              Number(m.price_bottom ?? 0) === 0 &&
-              Number(m.price_both ?? 0) === 0
-          );
-          if (freeMattress?.id) {
-            setSelectedMattresses(() =>
+        
+        // Pre-select mattress if coming from a mattress selection flow
+        const preSelectMattressId = searchParams.get('pre-select-mattress');
+        if (preSelectMattressId && fetched?.mattresses) {
+          const mattressToSelect = fetched.mattresses.find((m) => m.id === Number(preSelectMattressId));
+          if (mattressToSelect?.id) {
+            setSelectedMattresses(
               normalizeBunkMattressSelections([
                 {
-                  id: freeMattress.id,
-                  position: freeMattress.enable_bunk_positions ? 'both' : null,
+                  id: mattressToSelect.id,
+                  position: mattressToSelect.enable_bunk_positions ? 'both' : null,
                 },
               ])
             );
           }
         }
+        
+        if (fetched?.id) {
+          fetchReviews(fetched.id);
+        }
+
+        // Don't auto-select mattresses - let the customer choose
 
         if (fetched?.category_slug) {
 
@@ -1468,6 +1469,12 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
 
 
   const handleAddToCart = () => {
+    // If this is a mattress being selected for a bed, navigate back to the bed product
+    if (selectForBedSlug && product?.id) {
+      window.location.href = `/product/${selectForBedSlug}?pre-select-mattress=${product.id}`;
+      return;
+    }
+
     const extrasTotal = stylePriceDelta + totalMattressPrice;
     const variantMap = enabledGroups
       ? Object.fromEntries(Object.entries(selectedStyles).filter(([name]) => enabledGroups[name]))
@@ -1915,7 +1922,7 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                                           ? 'h-32 w-full flex-row items-center justify-start gap-4 px-3 text-left'
                                           : isStorageGroup
                                           ? 'h-28 w-full flex-col items-center justify-center px-3 text-center'
-                                          : 'h-32 w-28 flex-col items-center justify-center px-2 text-center'
+                                          : 'h-32 w-24 sm:w-28 flex-col items-center justify-center px-2 py-2 text-center'
                                       } shrink-0 rounded-lg border bg-white transition-all ${
                                         disabled
                                           ? 'cursor-not-allowed opacity-40'
@@ -1955,16 +1962,16 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                                         <IconVisual
                                           icon={option.icon_url || group.icon_url}
                                           alt={option.label}
-                                          className={isHeadboardGroup ? 'h-14 w-14 object-contain' : 'h-14 w-14 object-contain'}
+                                          className={isHeadboardGroup ? 'h-10 w-10 sm:h-14 sm:w-14 object-contain shrink-0' : 'h-14 w-14 object-contain'}
                                         />
                                       )}
                                       <div
                                         className={
-                                          isHeadboardGroup ? 'flex flex-col gap-1' : 'flex flex-col items-center gap-1 text-center'
+                                          isHeadboardGroup ? 'flex flex-col gap-1 min-w-0 flex-1' : 'flex flex-col items-center gap-1 text-center'
                                         }
                                       >
                                         <p
-                                          className={`text-xs font-semibold text-espresso leading-tight break-words line-clamp-3 ${
+                                          className={`text-[11px] sm:text-xs font-semibold text-espresso leading-tight break-words line-clamp-2 sm:line-clamp-3 ${
                                             isHeadboardGroup ? 'text-left' : 'text-center'
                                           }`}
                                         >
@@ -1972,7 +1979,7 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
                                           {option.description && ` (${option.description})`}
                                         </p>
                                         <p
-                                          className={`text-[11px] text-muted-foreground leading-tight ${
+                                          className={`text-[10px] sm:text-[11px] text-muted-foreground leading-tight ${
                                             isHeadboardGroup ? 'text-left' : 'text-center'
                                           }`}
                                         >
@@ -2102,7 +2109,7 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
 
               >
 
-                Add to Cart - {formatPrice(totalPrice)}
+                {selectForBedSlug ? 'Select Mattress' : `Add to Cart - ${formatPrice(totalPrice)}`}
 
               </Button>
 
@@ -2546,7 +2553,7 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 py-4 pb-24 space-y-4">
-              {mattresses.slice(0, 8).map((mattress) => {
+              {mattresses.slice(0, 4).map((mattress) => {
                 const selectedPick = selectedMattresses.find((m) => m.id === mattress.id);
                 const isSelected = Boolean(selectedPick);
                 const currentPosition =
@@ -2680,7 +2687,7 @@ const returnsInfoAnswer = (product?.returns_guarantee || '').trim();
               })}
 
               <Link
-                to="/category/mattresses"
+                to={`/category/mattresses${selectedSize ? `?bed-size=${encodeURIComponent(selectedSize)}&from=${encodeURIComponent(product.slug)}` : ''}`}
                 className="flex items-center justify-center rounded-lg border border-dashed border-primary/60 px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/5 transition"
               >
                 View all mattresses
